@@ -7,6 +7,8 @@
 import types
 import colander
 import logging
+import mongoq
+
 
 __all__ = []
 
@@ -175,9 +177,12 @@ class Registry(object):
         self.fields = {}
         self.refs = {}
         self.embedded = {}
-        self._schema = colander.SchemaNode(colander.Mapping(unknown='raise'))
+        validator = attrs.get(_VALIDATOR, None)
+        self._schema = colander.SchemaNode(colander.Mapping(unknown='raise'),
+                                                            validator=validator)
 
         for name, attr in self.attrs.items():
+
             if not isinstance(attr, Field):
                 continue
 
@@ -190,12 +195,9 @@ class Registry(object):
             try:
                 get_document_registry(attr.type)
             except AttributeError:
-                pass
+                continue
             else:
                 self.embedded[name] = attr
-
-            #if isinstance(attr, None):
-            #    self.refs[name] = attr
 
     @property
     def schema(self):
@@ -206,7 +208,8 @@ _DATABASE = '__database__'
 _COLLECTION = '__collection__'
 _REGISTRY = '__registry__'
 _SCHEMA = '__schema__'
-_VALIDATE = '__validate__'
+_VALIDATION = '__validation__'
+_VALIDATOR = '__validator__'
 
 
 class EmbeddedDocumentMeta(type):
@@ -219,42 +222,55 @@ class EmbeddedDocumentMeta(type):
         if _COLLECTION not in attrs:
             attrs[_COLLECTION] = name.lower()
 
+        if _VALIDATOR not in attrs:
+            attrs[_VALIDATOR] = None
+
         if _REGISTRY not in attrs:
             attrs[_REGISTRY] = Registry(cls, name, bases, attrs)
 
         if _SCHEMA not in attrs:
             attrs[_SCHEMA] = attrs[_REGISTRY].schema
 
-        if _VALIDATE not in attrs:
-            attrs[_VALIDATE] = True
+        if _VALIDATION not in attrs:
+            attrs[_VALIDATION] = True
 
-        for name, field in attrs.items():
+        for name in attrs[_REGISTRY].fields:
+            attrs[name] = getattr(mongoq.Q, name)
 
-            """
-            def getter(self):
-                value = self.get(name)
-                if not value is None and isinstance(field.type, Document):
-                    value = field.type(**value)
-                return value
+        def __init__(self, **kwargs):
 
-            def setter(self, value):
+            if getattr(self, _VALIDATION):
+                kwargs = getattr(self, _SCHEMA).deserialize(kwargs)
 
-                if not value is None and isinstance(field.type, Document):
-                    value = field.type(**value)
-                else:
-                    value = field.type(value)
+            for name in kwargs:
+                setattr(self, name, kwargs[name])
 
-                self[name] = value
+        attrs['__init__'] = __init__
 
-            def deleter(self, value):
-                self.pop(name, None)
+        def __setattr__(self, name, value):
 
-            getter.__name__ = '__get_{}__'.format(name)
-            setter.__name__ = '__set_{}__'.format(name)
-            deleter.__name__ = '__del_{}__'.format(name)
-            attrs['__fields__'][name] = field
-            attrs[name] = property(getter, setter, deleter)
-            """
+            fields = getattr(self, _REGISTRY).fields
+
+            if name not in fields:
+                return object.__setattr__(self, name, value)
+
+            field = fields[name]
+
+            if getattr(self, _VALIDATION):
+                value = field.schema.deserialize(value)
+
+            if isinstance(field, Mapping):
+                value = field.type(**value)
+
+            elif isinstance(field, Tuple):
+                value = tuple([field.type(**kwargs) for kwargs in value])
+
+            elif isinstance(field, Sequence):
+                value = [field.type(**kwargs) for kwargs in value]
+
+            object.__setattr__(self, name, value)
+
+        attrs['__setattr__'] = __setattr__
 
         return super(EmbeddedDocumentMeta, cls).__new__(cls,
                                                         name,

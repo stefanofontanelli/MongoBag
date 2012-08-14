@@ -106,24 +106,27 @@ class TestFields(unittest.TestCase):
         self.check_field(field)
 
     def test_mapping(self):
+        from model import MainEmbeddedDocument
         from mongobag import Mapping
 
         self.assertRaises(TypeError, Mapping)
-        field = Mapping()
+        field = Mapping(MainEmbeddedDocument)
         self.check_field(field)
 
     def test_tuple(self):
+        from model import MainEmbeddedDocument
         from mongobag import Tuple
 
         self.assertRaises(TypeError, Tuple)
-        field = Tuple()
+        field = Tuple(MainEmbeddedDocument)
         self.check_field(field)
 
     def test_sequence(self):
+        from model import MainEmbeddedDocument
         from mongobag import Sequence
 
         self.assertRaises(TypeError, Sequence)
-        field = Sequence()
+        field = Sequence(MainEmbeddedDocument)
         self.check_field(field)
 
     def test_object_id(self):
@@ -151,34 +154,44 @@ class TestFields(unittest.TestCase):
 class TestDocuments(unittest.TestCase):
 
     def setUp(self):
-
-        class MainEmbeddedDocument(object):
-
-            from mongobag import EmbeddedDocumentMeta
-
-            __metaclass__ = EmbeddedDocumentMeta
-
-        class MainDocument(object):
-
-            from mongobag import DocumentMeta
-            from mongobag import ObjectId
-
-            __metaclass__ = DocumentMeta
-
-            _id = ObjectId()
-
-        self.MainEmbeddedDocument = MainEmbeddedDocument
-        self.MainDocument = MainDocument
+        pass
 
     def tearDown(self):
         pass
 
     def test_get_document_registry(self):
+        from model import MainDocument
         from mongobag import get_document_registry
-        registry = get_document_registry(self.MainDocument)
+        registry = get_document_registry(MainDocument)
         self.assertIn('_id', registry.fields)
         self.assertEqual('_id', registry.fields['_id'].name)
 
     def test_get_document_schema(self):
+        from model import MainDocument
         from mongobag import get_document_registry
-        get_document_registry(self.MainDocument)
+        get_document_registry(MainDocument)
+
+    def test_embedded_document_meta(self):
+        from model import MainEmbeddedDocument
+        from mongobag.declarative import _DATABASE
+        from mongobag.declarative import _COLLECTION
+        from mongobag.declarative import _VALIDATION
+        from mongobag.declarative import _VALIDATOR
+        self.assertEqual(getattr(MainEmbeddedDocument, _DATABASE), None)
+        self.assertEqual(getattr(MainEmbeddedDocument, _COLLECTION), 'mainembeddeddocument')
+        self.assertEqual(getattr(MainEmbeddedDocument, _VALIDATION), True)
+        self.assertEqual(getattr(MainEmbeddedDocument, _VALIDATOR), None)
+
+    def test_embedded_document_init(self):
+        from model import MainEmbeddedDocument
+        import colander
+        integer = 5
+        string = 'teststring'
+        doc = MainEmbeddedDocument(string=string, integer=integer)
+        self.assertEqual(doc.string, string)
+        self.assertRaises(colander.Invalid, setattr, doc, 'integer', string)
+
+    def test_document_mongoq_queries(self):
+        from model import MainDocument
+        id_ = '1234567890AB'
+        self.assertEqual(MainDocument._id != id_, {'attr': {'$ne': id_}})
