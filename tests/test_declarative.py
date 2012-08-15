@@ -185,11 +185,21 @@ class TestDocuments(unittest.TestCase):
     def test_embedded_document_init(self):
         from model import MainEmbeddedDocument
         import colander
-        integer = 5
-        string = 'teststring'
-        doc = MainEmbeddedDocument(string=string, integer=integer)
-        self.assertEqual(doc.string, string)
-        self.assertRaises(colander.Invalid, setattr, doc, 'integer', string)
+        import datetime
+        params = dict(name='My Name')
+        self.assertRaises(colander.Invalid, MainEmbeddedDocument, **params)
+        params = dict(integer=5,
+                      string='teststring',
+                      boolean=False,
+                      float=0.5,
+                      decimal=0.5,
+                      datetime=datetime.datetime.now(),
+                      date=datetime.date.today(),
+                      time=datetime.datetime.now().time(),
+                      colander='colander.Invalid')
+        doc = MainEmbeddedDocument(**params)
+        self.assertEqual(doc.string, params['string'])
+        self.assertRaises(colander.Invalid, setattr, doc, 'integer', 'astring')
 
     def test_document_mongoq_queries(self):
         from model import MainDocument

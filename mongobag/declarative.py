@@ -84,8 +84,8 @@ class Decimal(Field):
 
 class DateTime(Field):
 
-    def __init__(self, default_tzinfo=None, *children, **kwargs):
-        super(DateTime, self).__init__(colander.DateTime(default_tzinfo),
+    def __init__(self, tzinfo=colander.iso8601.Utc(), *children, **kwargs):
+        super(DateTime, self).__init__(types.DateTime(tzinfo),
                                        *children,
                                        **kwargs)
 
@@ -93,7 +93,7 @@ class DateTime(Field):
 class Date(Field):
 
     def __init__(self, *children, **kwargs):
-        super(Date, self).__init__(colander.Date(),
+        super(Date, self).__init__(types.Date(),
                                    *children,
                                    **kwargs)
 
@@ -101,7 +101,7 @@ class Date(Field):
 class Time(Field):
 
     def __init__(self, *children, **kwargs):
-        super(Time, self).__init__(colander.Time(),
+        super(Time, self).__init__(types.Time(),
                                    *children,
                                    **kwargs)
 
@@ -109,7 +109,7 @@ class Time(Field):
 class GlobalObject(Field):
 
     def __init__(self, package, *children, **kwargs):
-        super(GlobalObject, self).__init__(colander.GlobalObject(package),
+        super(GlobalObject, self).__init__(types.GlobalObject(package),
                                            *children,
                                            **kwargs)
 

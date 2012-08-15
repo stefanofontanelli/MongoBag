@@ -6,11 +6,59 @@
 
 import bson
 import colander
+import datetime
 import logging
 
 __all__ = []
 
 log = logging.getLogger(__file__)
+
+
+class Date(colander.Date):
+
+    def deserialize(self, node, cstruct):
+
+        if isinstance(cstruct, datetime.date):
+            return cstruct
+
+        return super(Date, self).deserialize(node, cstruct)
+
+
+class DateTime(colander.DateTime):
+
+    def deserialize(self, node, cstruct):
+
+        if isinstance(cstruct, datetime.datetime):
+            return cstruct
+
+        return super(DateTime, self).deserialize(node, cstruct)
+
+
+class Time(colander.Time):
+
+    def deserialize(self, node, cstruct):
+
+        if isinstance(cstruct, datetime.time):
+            return cstruct
+
+        return super(Time, self).deserialize(node, cstruct)
+
+
+class GlobalObject(colander.GlobalObject):
+
+    def deserialize(self, node, cstruct):
+
+        print 'deserialize GO', cstruct
+
+        try:
+            type_ = basestring
+        except NameError:
+            type_ = str
+
+        if not isinstance(cstruct, type_):
+            return cstruct
+
+        return super(GlobalObject, self).deserialize(node, cstruct)
 
 
 class ObjectId(colander.String):
