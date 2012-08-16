@@ -16,154 +16,122 @@ __all__ = []
 log = logging.getLogger(__file__)
 
 
-class Field(object):
+class Field(colander.SchemaNode):
+    """Base class for fields. """
 
-    def __init__(self, type_, *children, **kwargs):
+    def serialize(self, appstruct=colander.null):
 
-        if isinstance(type_, colander.SchemaType):
-            self._schema = colander.SchemaNode(type_, *children, **kwargs)
+        if not isinstance(self.default,
+                          colander.deferred) and callable(self.default):
+
+            default = self.default()
+
         else:
-            raise ValueError("Type of argument 'type_' is not supported.")
+            default = self.default
 
-    @property
-    def type(self):
-        return self._schema.typ
+        if appstruct is colander.null:
+            appstruct = default
 
-    @property
-    def name(self):
-        return self._schema.name
+        if isinstance(appstruct, colander.deferred):
+            appstruct = colander.null
 
-    @name.setter
-    def name(self, name):
-        self._schema.name = name
+        return  self.typ.serialize(self, appstruct)
 
-    @property
-    def schema(self):
-        return self._schema
+    def deserialize(self, cstruct=colander.null):
 
+        appstruct = self.typ.deserialize(self, cstruct)
 
-class String(Field):
+        if self.preparer is not None:
+            appstruct = self.preparer(appstruct)
 
-    def __init__(self, encoding=None, *children, **kwargs):
-        super(String, self).__init__(colander.String(encoding),
-                                     *children,
-                                     **kwargs)
+        if appstruct is colander.null:
 
+            if not isinstance(self.missing,
+                              colander.deferred) and callable(self.missing):
 
-class Integer(Field):
+                missing = self.missing()
 
-    def __init__(self, *children, **kwargs):
-        super(Integer, self).__init__(colander.Int(),
-                                      *children,
-                                      **kwargs)
+            else:
+                missing = self.missing
 
+            appstruct = missing
 
-class Boolean(Field):
+            if appstruct is colander.required:
+                raise colander.Invalid(self, colander._('Required'))
 
-    def __init__(self, *children, **kwargs):
-        super(Boolean, self).__init__(colander.Boolean(),
-                                      *children,
-                                      **kwargs)
+            if isinstance(appstruct, colander.deferred):
+                raise colander.Invalid(self, colander._('Required'))
 
+            return appstruct
 
-class Float(Field):
+        if self.validator is not None:
+            if not isinstance(self.validator, colander.deferred):
+                self.validator(self, appstruct)
 
-    def __init__(self, *children, **kwargs):
-        super(Float, self).__init__(colander.Float(),
-                                    *children,
-                                    **kwargs)
-
-
-class Decimal(Field):
-
-    def __init__(self, *children, **kwargs):
-        super(Decimal, self).__init__(colander.Decimal(),
-                                      *children,
-                                      **kwargs)
-
-
-class DateTime(Field):
-
-    def __init__(self, tzinfo=colander.iso8601.Utc(), *children, **kwargs):
-        super(DateTime, self).__init__(types.DateTime(tzinfo),
-                                       *children,
-                                       **kwargs)
-
-
-class Date(Field):
-
-    def __init__(self, *children, **kwargs):
-        super(Date, self).__init__(types.Date(),
-                                   *children,
-                                   **kwargs)
-
-
-class Time(Field):
-
-    def __init__(self, *children, **kwargs):
-        super(Time, self).__init__(types.Time(),
-                                   *children,
-                                   **kwargs)
-
-
-class GlobalObject(Field):
-
-    def __init__(self, package, *children, **kwargs):
-        super(GlobalObject, self).__init__(types.GlobalObject(package),
-                                           *children,
-                                           **kwargs)
-
-
-class Mapping(Field):
-
-    def __init__(self, type_, unknown='ignore', **kwargs):
-
-        try:
-            registry = get_document_registry(type_)
-        except AttributeError:
-            raise ValueError('type_ must be a document.')
-
-        super(Mapping, self).__init__(colander.Mapping(unknown),
-                                      *registry.schema.children,
-                                      **kwargs)
-
-
-class Tuple(Field):
-
-    def __init__(self, type_, **kwargs):
-
-        try:
-            registry = get_document_registry(type_)
-        except AttributeError:
-            raise ValueError('type_ must be a document.')
-
-        super(Tuple, self).__init__(colander.Tuple(),
-                                    *(registry.schema,),
-                                    **kwargs)
-
-
-class Sequence(Field):
-
-    def __init__(self, type_, accept_scalar=False, **kwargs):
-
-        try:
-            registry = get_document_registry(type_)
-        except AttributeError:
-            raise ValueError('type_ must be a document.')
-
-        super(Sequence, self).__init__(colander.Sequence(accept_scalar),
-                                       *(registry.schema,),
-                                       **kwargs)
+        return appstruct
 
 
 class ObjectId(Field):
 
-    def __init__(self, encoding=None, *children, **kwargs):
-        super(ObjectId, self).__init__(types.ObjectId(),
-                                       default=colander.null,
-                                       missing=colander.null,
-                                       *children,
-                                       **kwargs)
+    def __init__(self, missing=colander.null, **kwargs):
+        Field.__init__(self, types.ObjectId(), missing=missing, **kwargs)
+
+
+class Integer(Field):
+
+    def __init__(self, **kwargs):
+        Field.__init__(self, types.Integer(), **kwargs)
+
+
+class String(Field):
+
+    def __init__(self, encoding=None, **kwargs):
+        Field.__init__(self, colander.String(encoding), **kwargs)
+
+
+class Boolean(Field):
+
+    def __init__(self, **kwargs):
+        Field.__init__(self, types.Boolean(), **kwargs)
+
+
+class Float(Field):
+
+    def __init__(self, **kwargs):
+        Field.__init__(self, types.Float(), **kwargs)
+
+
+class DateTime(Field):
+
+    def __init__(self, tzinfo=colander.iso8601.Utc(), **kwargs):
+        Field.__init__(self, types.DateTime(tzinfo), **kwargs)
+
+
+class Date(Field):
+
+    def __init__(self, **kwargs):
+        Field.__init__(self, types.Date(), **kwargs)
+
+
+class Time(Field):
+
+    def __init__(self, **kwargs):
+        Field.__init__(self, types.Time(), **kwargs)
+
+
+class Embedded(Field):
+
+    def __init__(self, typ, **kwargs):
+        Field.__init__(self, types.EmbeddedDocument(typ), **kwargs)
+
+
+class EmbeddedList(Field):
+
+    def __init__(self, typ, **kwargs):
+        Field.__init__(self, colander.Sequence(False), Embedded(typ), **kwargs)
+
+
+# FIXME: add class Reference and list of Reference ?
 
 
 class Registry(object):
@@ -174,123 +142,118 @@ class Registry(object):
         self.name = name
         self.bases = bases
         self.attrs = attrs
+        self.validator = attrs[class_._VALIDATOR]
+        typ = colander.Mapping(unknown='raise')
+        self.schema = colander.SchemaNode(typ, name=name,
+                                          validator=self.validator)
+
         self.fields = {}
-        self.refs = {}
-        self.embedded = {}
-        validator = attrs.get(_VALIDATOR, None)
-        self._schema = colander.SchemaNode(colander.Mapping(unknown='raise'),
-                                                            validator=validator)
-
-        for name, attr in self.attrs.items():
-
-            if not isinstance(attr, Field):
-                continue
-
-            if not attr.name:
-                attr.name = name
-
-            self.fields[name] = attr
-            self._schema.add(attr.schema)
-
+        for base in bases:
             try:
-                get_document_registry(attr.type)
+                registry = getattr(base, class_._REGISTRY)
+
             except AttributeError:
                 continue
+
             else:
-                self.embedded[name] = attr
+                self.fields.update(registry.fields)
 
-    @property
-    def schema(self):
-        return self._schema
+        for name, field in self.attrs.items():
 
+            if not isinstance(field, Field):
+                continue
 
-_DATABASE = '__database__'
-_COLLECTION = '__collection__'
-_REGISTRY = '__registry__'
-_SCHEMA = '__schema__'
-_VALIDATION = '__validation__'
-_VALIDATOR = '__validator__'
+            field.name = name
+            self.fields[name] = field
+            self.schema.add(field)
 
 
-class EmbeddedDocumentMeta(type):
+class DocumentMetaclass(type):
 
-    def __new__(cls, name, bases, attrs):
-
-        if _DATABASE not in attrs:
-            attrs[_DATABASE] = None
-
-        if _COLLECTION not in attrs:
-            attrs[_COLLECTION] = name.lower()
-
-        if _VALIDATOR not in attrs:
-            attrs[_VALIDATOR] = None
-
-        if _REGISTRY not in attrs:
-            attrs[_REGISTRY] = Registry(cls, name, bases, attrs)
-
-        if _SCHEMA not in attrs:
-            attrs[_SCHEMA] = attrs[_REGISTRY].schema
-
-        if _VALIDATION not in attrs:
-            attrs[_VALIDATION] = True
-
-        for name in attrs[_REGISTRY].fields:
-            attrs[name] = getattr(mongoq.Q, name)
-
-        def __init__(self, **kwargs):
-
-            if getattr(self, _VALIDATION):
-                kwargs = getattr(self, _SCHEMA).deserialize(kwargs)
-
-            for name in kwargs:
-                setattr(self, name, kwargs[name])
-
-        attrs['__init__'] = __init__
-
-        def __setattr__(self, name, value):
-
-            fields = getattr(self, _REGISTRY).fields
-
-            if name not in fields:
-                return object.__setattr__(self, name, value)
-
-            field = fields[name]
-
-            if getattr(self, _VALIDATION):
-                value = field.schema.deserialize(value)
-
-            if isinstance(field, Mapping):
-                value = field.type(**value)
-
-            elif isinstance(field, Tuple):
-                value = tuple([field.type(**kwargs) for kwargs in value])
-
-            elif isinstance(field, Sequence):
-                value = [field.type(**kwargs) for kwargs in value]
-
-            object.__setattr__(self, name, value)
-
-        attrs['__setattr__'] = __setattr__
-
-        return super(EmbeddedDocumentMeta, cls).__new__(cls,
-                                                        name,
-                                                        bases,
-                                                        attrs)
-
-
-class DocumentMeta(EmbeddedDocumentMeta):
+    _DATABASE = '__database__'
+    _COLLECTION = '__collection__'
+    _REGISTRY = '__registry__'
+    _SCHEMA = '__schema__'
+    _VALIDATOR = '__validator__'
 
     def __new__(cls, name, bases, attrs):
 
         if '_id' not in attrs:
-            raise TypeError("Class '%s' has no '_id' field." % name)
+            attrs['_id'] = ObjectId()
 
-        return super(DocumentMeta, cls).__new__(cls, name, bases, attrs)
+        if cls._DATABASE not in attrs:
+            attrs[cls._DATABASE] = None
+
+        if cls._COLLECTION not in attrs:
+            attrs[cls._COLLECTION] = name.lower()
+
+        if cls._VALIDATOR not in attrs:
+            attrs[cls._VALIDATOR] = None
+
+        if cls._REGISTRY not in attrs:
+            attrs[cls._REGISTRY] = Registry(cls, name, bases, attrs)
+
+        if cls._SCHEMA not in attrs:
+            attrs[cls._SCHEMA] = attrs[cls._REGISTRY].schema
+
+        for name in attrs[cls._REGISTRY].fields:
+            attrs[name] = getattr(mongoq.Q, name)
+
+        return type.__new__(cls, name, bases, attrs)
+
+    def __setattr__(cls, name, value):
+
+        if name in getattr(cls, cls._REGISTRY).fields:
+            raise AttributeError('Cannot replace document fields.')
+
+        type.__setattr__(cls, name, value)
+
+
+class Document(object):
+
+    __metaclass__ = DocumentMetaclass
+
+    def __init__(self, **kwargs):
+
+        try:
+            kwargs = getattr(self, self.__class__._SCHEMA).deserialize(kwargs)
+
+        except colander.Invalid as e:
+            if e.msg and e.msg.startswith('Unrecognized keys in mapping'):
+                msg = 'Unrecognized keyword arguments for {}: {}'
+                raise TypeError(msg.format(e.node.name,
+                                           e.msg.mapping['val'].keys()))
+            raise e
+
+        for name in kwargs:
+            object.__setattr__(self, name, kwargs[name])
+
+    def __setattr__(self, name, value):
+
+        fields = getattr(self, self.__class__._REGISTRY).fields
+        if name in fields:
+            value = fields[name].deserialize(value)
+
+        object.__setattr__(self, name, value)
+
+    def serialize(self):
+
+        serialized = {}
+        for name in getattr(self.__class__, self.__class__._REGISTRY).fields:
+
+            value = getattr(self, name, colander.null)
+
+            if value is colander.null:
+                continue
+
+            serialized[name] = value
+
+        return serialized
 
 
 def get_document_registry(doc):
-    return getattr(doc, _REGISTRY)
+    return getattr(doc, doc.__class__._REGISTRY)
 
 
 def get_document_schema(doc):
-    return getattr(doc, _SCHEMA)
+    return getattr(doc, doc.__class__._SCHEMA)

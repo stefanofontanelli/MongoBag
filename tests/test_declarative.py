@@ -13,121 +13,11 @@ log = logging.getLogger(__name__)
 
 class TestFields(unittest.TestCase):
 
-    def setUp(self):
+    def test_field_default_callable(self):
         pass
 
-    def tearDown(self):
+    def test_field_missing_callable(self):
         pass
-
-    def check_field(self, field):
-        import colander
-        self.assertEqual(field.name, '')
-        self.assertEqual(isinstance(field.schema, colander.SchemaNode), True)
-        self.assertRaises(AttributeError, setattr, field, 'type', None)
-        self.assertRaises(AttributeError, setattr, field, 'schema', None)
-        name = "username"
-        field.name = name
-        self.assertEqual(field.name, name)
-
-    def test_field(self):
-        from mongobag import Field
-        import colander
-
-        field = Field(colander.String())
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.String), True)
-        self.assertRaises(ValueError, Field, colander.SchemaNode)
-        name = 'password'
-        field = Field(colander.String(), name=name)
-        self.assertEqual(field.name, name)
-
-    def test_integer(self):
-        from mongobag import Integer
-        import colander
-
-        field = Integer()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Integer), True)
-
-    def test_boolean(self):
-        from mongobag import Boolean
-        import colander
-
-        field = Boolean()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Boolean), True)
-
-    def test_float(self):
-        from mongobag import Float
-        import colander
-
-        field = Float()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Float), True)
-
-    def test_decimal(self):
-        from mongobag import Decimal
-        import colander
-
-        field = Decimal()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Decimal), True)
-
-    def test_datetime(self):
-        from mongobag import DateTime
-        import colander
-
-        field = DateTime()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.DateTime), True)
-
-    def test_date(self):
-        from mongobag import Date
-        import colander
-
-        field = Date()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Date), True)
-
-    def test_time(self):
-        from mongobag import Time
-        import colander
-
-        field = Time()
-        self.check_field(field)
-        self.assertEqual(isinstance(field.type, colander.Time), True)
-
-    def test_global_object(self):
-        from mongobag import GlobalObject
-        import colander
-
-        self.assertRaises(TypeError, GlobalObject)
-        field = GlobalObject(colander)
-        self.check_field(field)
-
-    def test_mapping(self):
-        from model import MainEmbeddedDocument
-        from mongobag import Mapping
-
-        self.assertRaises(TypeError, Mapping)
-        field = Mapping(MainEmbeddedDocument)
-        self.check_field(field)
-
-    def test_tuple(self):
-        from model import MainEmbeddedDocument
-        from mongobag import Tuple
-
-        self.assertRaises(TypeError, Tuple)
-        field = Tuple(MainEmbeddedDocument)
-        self.check_field(field)
-
-    def test_sequence(self):
-        from model import MainEmbeddedDocument
-        from mongobag import Sequence
-
-        self.assertRaises(TypeError, Sequence)
-        field = Sequence(MainEmbeddedDocument)
-        self.check_field(field)
 
     def test_object_id(self):
         from mongobag import ObjectId
@@ -135,23 +25,115 @@ class TestFields(unittest.TestCase):
         import colander
 
         field = ObjectId()
-        self.check_field(field)
         field.name = '_id'
-        self.assertEqual(isinstance(field.type, colander.String), True)
-        self.assertEqual(field.schema.serialize(), colander.null)
-        self.assertEqual(isinstance(field.schema.deserialize(),
-                                    bson.objectid.ObjectId), True)
-        self.assertRaises(colander.Invalid,
-                          field.schema.deserialize,
-                          '')
-        self.assertRaises(colander.Invalid, field.schema.deserialize, 'No12chars')
-        self.assertRaises(colander.Invalid,
-                          field.schema.deserialize,
-                          'greaterthan12chars')
-        field.schema.deserialize('0123456789AB')
+        self.assertEqual(field.serialize(), colander.null)
+        self.assertEqual(field.deserialize(), colander.null)
+
+        objectid = bson.objectid.ObjectId('x' * 12)
+        self.assertEqual(field.serialize(objectid), objectid)
+        self.assertEqual(field.deserialize(objectid), objectid)
+        self.assertRaises(colander.Invalid, field.serialize, '')
+        self.assertRaises(colander.Invalid, field.serialize, {'_id': objectid})
+        self.assertRaises(colander.Invalid, field.deserialize, '')
+        self.assertRaises(colander.Invalid, field.deserialize, {'_id': objectid})
+
+        for i in xrange(0, 12):
+            self.assertRaises(colander.Invalid, field.deserialize, 'x' * i)
+        for i in xrange(13, 32):
+            self.assertRaises(colander.Invalid, field.deserialize, 'x' * i)
+
+        self.assertEqual(str(field.deserialize('x' * 12)), str(objectid))
+
+    def test_integer(self):
+        from mongobag import Integer
+        import colander
+
+        field = Integer(name='myfield')
+        self.assertEqual(field.serialize(), colander.null)
+        self.assertRaises(colander.Invalid, field.deserialize)
+        self.assertEqual(field.deserialize(5), 5)
+        self.assertEqual(field.deserialize(5.0), 5)
+        self.assertRaises(colander.Invalid, field.deserialize, '5.0')
+        self.assertRaises(colander.Invalid, field.deserialize, '')
+        self.assertRaises(colander.Invalid, field.deserialize, 'a string')
+
+    def test_string(self):
+        from mongobag import String
+
+        field = String()
+        value = 'pippo'
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_boolean(self):
+        from mongobag import Boolean
+
+        field = Boolean()
+        value = True
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_float(self):
+        from mongobag import Float
+
+        field = Float()
+        value = 9.99
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_date(self):
+        from mongobag import Date
+        import datetime
+
+        field = Date()
+        value = datetime.date.today()
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_datetime(self):
+        from mongobag import DateTime
+        import datetime
+
+        field = DateTime()
+        value = datetime.datetime.now()
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_time(self):
+        from mongobag import Time
+        import datetime
+
+        field = Time()
+        value = datetime.datetime.now().time()
+        self.assertEqual(field.serialize(value), value)
+        self.assertEqual(field.deserialize(value), value)
+
+    def test_embedded(self):
+        from mongobag import Embedded
+        from model import DummyDocument
+
+        field = Embedded(DummyDocument)
+        value = DummyDocument(name='Dummy Document')
+        params = dict(name=value.name)
+        self.assertEqual(field.serialize(value), params)
+        self.assertEqual(field.deserialize(value), value)
+        self.assertEqual(field.serialize(field.deserialize(params)), params)
+
+    def test_embedded_list(self):
+        from mongobag import EmbeddedList
+        from model import DummyDocument
+
+        field = EmbeddedList(DummyDocument)
+        doc = DummyDocument(name='Dummy Document')
+        value = [doc, doc, doc]
+        serialized = dict(name=doc.name)
+        list_ = [serialized, serialized, serialized]
+        self.assertEqual(field.serialize(value), list_)
+        self.assertEqual(field.deserialize(value), value)
+        self.assertEqual(field.serialize(field.deserialize(list_)), list_)
 
 
-class TestDocuments(unittest.TestCase):
+class TestDocument(unittest.TestCase):
 
     def setUp(self):
         pass
@@ -159,35 +141,36 @@ class TestDocuments(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_get_document_registry(self):
+    def test_metaclass_setattr(self):
         from model import MainDocument
+        from mongobag import String
+        self.assertRaises(AttributeError, setattr, MainDocument, 'string', String())
+
+    def test_document_serialize(self):
+        from model import DummyDocument
+        value = DummyDocument(name='Dummy Document')
+        self.assertEqual(value.serialize(), {'name': value.name})
+
+    def test_get_document_registry(self):
+        from model import DummyDocument
         from mongobag import get_document_registry
-        registry = get_document_registry(MainDocument)
-        self.assertIn('_id', registry.fields)
-        self.assertEqual('_id', registry.fields['_id'].name)
+        get_document_registry(DummyDocument)
 
     def test_get_document_schema(self):
-        from model import MainDocument
+        from model import DummyDocument
         from mongobag import get_document_registry
-        get_document_registry(MainDocument)
+        get_document_registry(DummyDocument)
 
-    def test_embedded_document_meta(self):
-        from model import MainEmbeddedDocument
-        from mongobag.declarative import _DATABASE
-        from mongobag.declarative import _COLLECTION
-        from mongobag.declarative import _VALIDATION
-        from mongobag.declarative import _VALIDATOR
-        self.assertEqual(getattr(MainEmbeddedDocument, _DATABASE), None)
-        self.assertEqual(getattr(MainEmbeddedDocument, _COLLECTION), 'mainembeddeddocument')
-        self.assertEqual(getattr(MainEmbeddedDocument, _VALIDATION), True)
-        self.assertEqual(getattr(MainEmbeddedDocument, _VALIDATOR), None)
-
-    def test_embedded_document_init(self):
-        from model import MainEmbeddedDocument
+    def test_document_init(self):
+        from model import MainDocument
         import colander
         import datetime
-        params = dict(name='My Name')
-        self.assertRaises(colander.Invalid, MainEmbeddedDocument, **params)
+        self.assertEqual(getattr(MainDocument, MainDocument._DATABASE), None)
+        self.assertEqual(getattr(MainDocument, MainDocument._COLLECTION),
+                         'maindocument')
+        self.assertEqual(getattr(MainDocument, MainDocument._VALIDATOR), None)
+        params = dict()
+        self.assertRaises(colander.Invalid, MainDocument, **params)
         params = dict(integer=5,
                       string='teststring',
                       boolean=False,
@@ -197,7 +180,15 @@ class TestDocuments(unittest.TestCase):
                       date=datetime.date.today(),
                       time=datetime.datetime.now().time(),
                       colander='colander.Invalid')
-        doc = MainEmbeddedDocument(**params)
+        self.assertRaises(TypeError, MainDocument, **params)
+        params = dict(integer=5,
+                      string='teststring',
+                      boolean=False,
+                      float=0.5,
+                      datetime=datetime.datetime.now(),
+                      date=datetime.date.today(),
+                      time=datetime.datetime.now().time())
+        doc = MainDocument(**params)
         self.assertEqual(doc.string, params['string'])
         self.assertRaises(colander.Invalid, setattr, doc, 'integer', 'astring')
 
