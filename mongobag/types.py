@@ -43,67 +43,10 @@ class ObjectId(object):
             return value
 
 
-class Integer(colander.Integer):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-
-class Float(colander.Float):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-
-class Boolean(colander.Boolean):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-
-class Date(colander.Date):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-    def deserialize(self, node, cstruct):
-
-        if isinstance(cstruct, datetime.date):
-            return cstruct
-
-        return super(Date, self).deserialize(node, cstruct)
-
-
-class DateTime(colander.DateTime):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-    def deserialize(self, node, cstruct):
-
-        if isinstance(cstruct, datetime.datetime):
-            return cstruct
-
-        return super(DateTime, self).deserialize(node, cstruct)
-
-
-class Time(colander.Time):
-
-    def serialize(self, node, value):
-        return self.deserialize(node, value)
-
-    def deserialize(self, node, cstruct):
-
-        if isinstance(cstruct, datetime.time):
-            return cstruct
-
-        return super(Time, self).deserialize(node, cstruct)
-
-
-class EmbeddedDocument(object):
+class EmbeddedDocument(colander.Mapping):
 
     def __init__(self, typ):
-
+        colander.Mapping.__init__(self, 'raise')
         self.typ = typ
         try:
             self.schema = getattr(typ, typ.__class__._SCHEMA).clone()

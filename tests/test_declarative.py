@@ -151,15 +151,10 @@ class TestDocument(unittest.TestCase):
         value = DummyDocument(name='Dummy Document')
         self.assertEqual(value.serialize(), {'name': value.name})
 
-    def test_get_document_registry(self):
+    def test_get_cls_collection(self):
         from model import DummyDocument
-        from mongobag import get_document_registry
-        get_document_registry(DummyDocument)
-
-    def test_get_document_schema(self):
-        from model import DummyDocument
-        from mongobag import get_document_registry
-        get_document_registry(DummyDocument)
+        from mongobag import get_cls_collection
+        get_cls_collection(DummyDocument)
 
     def test_document_init(self):
         from model import MainDocument

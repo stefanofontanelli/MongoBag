@@ -4,22 +4,26 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-from .declarative import Boolean
-from .declarative import Date
-from .declarative import DateTime
+from .controllers import MongoBase
 from .declarative import Document
-from .declarative import DocumentMetaclass
-from .declarative import Embedded
-from .declarative import EmbeddedList
-from .declarative import Field
-from .declarative import Float
-from .declarative import Integer
-from .declarative import ObjectId
-from .declarative import Registry
-from .declarative import String
-from .declarative import Time
-from .declarative import get_document_registry
-from .declarative import get_document_schema
+from .declarative import DocumentMetaClass
+from .fields import Boolean
+from .fields import Date
+from .fields import DateTime
+from .fields import Embedded
+from .fields import EmbeddedList
+from .fields import Field
+from .fields import Float
+from .fields import Integer
+from .fields import ObjectId
+from .fields import String
+from .fields import Time
+from .exc import MultipleResultsFound
+from .exc import NoResultFound
+from .utils import get_cls_collection
+from .utils import get_obj_collection
+from .utils import Registry
+from .utils import set_obj_collection
 
 
 __all__ = [
@@ -27,16 +31,20 @@ __all__ = [
     'Date',
     'DateTime',
     'Document',
-    'DocumentMetaclass',
+    'DocumentMetaClass',
     'Embedded',
     'EmbeddedList',
     'Field',
     'Float',
     'Integer',
+    'MongoBase',
+    'MultipleResultsFound',
+    'NoResultFound',
     'ObjectId',
     'Registry',
     'String',
     'Time',
-    'get_document_registry',
-    'get_document_schema'
+    'get_cls_collection',
+    'get_obj_collection',
+    'set_obj_collection'
 ]
