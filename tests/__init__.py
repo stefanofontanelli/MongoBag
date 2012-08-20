@@ -4,6 +4,4 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-import test_schema
-
-__all__ = ['test_schema']
+__all__ = []

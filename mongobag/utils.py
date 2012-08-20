@@ -12,14 +12,6 @@ def get_cls_collection(cls):
     return getattr(cls, cls._COLLECTION)
 
 
-def get_obj_collection(obj):
-    return getattr(obj, obj.__class__._COLLECTION, None)
-
-
-def set_obj_collection(obj, collection):
-    return setattr(obj, obj.__class__._COLLECTION, collection)
-
-
 class Registry(object):
 
     def __init__(self, meta, bases, attrs):

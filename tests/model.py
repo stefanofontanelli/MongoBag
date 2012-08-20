@@ -9,6 +9,7 @@ from mongobag import Float
 from mongobag import Integer
 from mongobag import String
 from mongobag import Time
+import colander
 
 
 class DummyDocument(Document):
@@ -33,7 +34,7 @@ class MixinDocument(DummyDocument, MainDocument):
     mixinfield = String()
 
 
-DummyDocument.description = String()
+DummyDocument.description = String(missing=colander.null, default=colander.null)
 
 
 class Group(Document):

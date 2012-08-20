@@ -20,14 +20,20 @@ from .fields import String
 from .fields import Time
 from .exc import MultipleResultsFound
 from .exc import NoResultFound
+from .mongo import Connection
+from .mongo import Database
+from .mongo import Collection
+from .mongo import Cursor
 from .utils import get_cls_collection
-from .utils import get_obj_collection
 from .utils import Registry
-from .utils import set_obj_collection
 
 
 __all__ = [
     'Boolean',
+    'Collection',
+    'Connection',
+    'Cursor',
+    'Database',
     'Date',
     'DateTime',
     'Document',
@@ -44,7 +50,5 @@ __all__ = [
     'Registry',
     'String',
     'Time',
-    'get_cls_collection',
-    'get_obj_collection',
-    'set_obj_collection'
+    'get_cls_collection'
 ]

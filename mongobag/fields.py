@@ -4,7 +4,7 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-import types
+from .types import ObjectId as objectid
 import colander
 import datetime
 import logging
@@ -82,7 +82,7 @@ class Field(colander.SchemaNode):
 class ObjectId(Field):
 
     def __init__(self, missing=colander.null, **kwargs):
-        Field.__init__(self, types.ObjectId(), missing=missing, **kwargs)
+        Field.__init__(self, objectid(), missing=missing, **kwargs)
 
 
 class Integer(Field):

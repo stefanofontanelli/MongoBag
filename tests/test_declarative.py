@@ -29,7 +29,7 @@ class TestFields(unittest.TestCase):
         self.assertEqual(field.serialize(), colander.null)
         self.assertEqual(field.deserialize(), colander.null)
 
-        objectid = bson.objectid.ObjectId('x' * 12)
+        objectid = bson.objectid.ObjectId('5032a91988382a103b763758')
         self.assertEqual(field.serialize(objectid), objectid)
         self.assertEqual(field.deserialize(objectid), objectid)
         self.assertRaises(colander.Invalid, field.serialize, '')
@@ -37,12 +37,12 @@ class TestFields(unittest.TestCase):
         self.assertRaises(colander.Invalid, field.deserialize, '')
         self.assertRaises(colander.Invalid, field.deserialize, {'_id': objectid})
 
-        for i in xrange(0, 12):
+        for i in range(0, 12):
             self.assertRaises(colander.Invalid, field.deserialize, 'x' * i)
-        for i in xrange(13, 32):
+        for i in range(13, 32):
             self.assertRaises(colander.Invalid, field.deserialize, 'x' * i)
 
-        self.assertEqual(str(field.deserialize('x' * 12)), str(objectid))
+        self.assertEqual(str(field.deserialize('5032a91988382a103b763758')), str(objectid))
 
     def test_integer(self):
         from mongobag import Integer
@@ -110,7 +110,7 @@ class TestFields(unittest.TestCase):
 
     def test_embedded(self):
         from mongobag import Embedded
-        from model import DummyDocument
+        from .model import DummyDocument
 
         field = Embedded(DummyDocument)
         value = DummyDocument(name='Dummy Document')
@@ -121,7 +121,7 @@ class TestFields(unittest.TestCase):
 
     def test_embedded_list(self):
         from mongobag import EmbeddedList
-        from model import DummyDocument
+        from .model import DummyDocument
 
         field = EmbeddedList(DummyDocument)
         doc = DummyDocument(name='Dummy Document')
@@ -142,25 +142,24 @@ class TestDocument(unittest.TestCase):
         pass
 
     def test_metaclass_setattr(self):
-        from model import MainDocument
+        from .model import MainDocument
         from mongobag import String
         self.assertRaises(AttributeError, setattr, MainDocument, 'string', String())
 
     def test_document_serialize(self):
-        from model import DummyDocument
+        from .model import DummyDocument
         value = DummyDocument(name='Dummy Document')
         self.assertEqual(value.serialize(), {'name': value.name})
 
     def test_get_cls_collection(self):
-        from model import DummyDocument
+        from .model import DummyDocument
         from mongobag import get_cls_collection
         get_cls_collection(DummyDocument)
 
     def test_document_init(self):
-        from model import MainDocument
+        from .model import MainDocument
         import colander
         import datetime
-        self.assertEqual(getattr(MainDocument, MainDocument._DATABASE), None)
         self.assertEqual(getattr(MainDocument, MainDocument._COLLECTION),
                          'maindocument')
         self.assertEqual(getattr(MainDocument, MainDocument._VALIDATOR), None)
@@ -188,6 +187,6 @@ class TestDocument(unittest.TestCase):
         self.assertRaises(colander.Invalid, setattr, doc, 'integer', 'astring')
 
     def test_document_mongoq_queries(self):
-        from model import MainDocument
+        from .model import MainDocument
         id_ = '1234567890AB'
         self.assertEqual(MainDocument._id != id_, {'attr': {'$ne': id_}})

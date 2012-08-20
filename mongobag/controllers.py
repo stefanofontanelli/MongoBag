@@ -7,7 +7,6 @@
 from .exc import NoResultFound
 from .exc import MultipleResultsFound
 from .utils import get_cls_collection
-from .utils import set_obj_collection
 import logging
 
 __all__ = []
@@ -32,11 +31,9 @@ class MongoBase(object):
         if opts is None:
             opts = {}
 
-        collection = database[self.collection]
         obj = self.class_(**kwargs)
-        set_obj_collection(obj, collection)
-        obj._id = collection.insert(obj.serialize(), manipulate, safe,
-                                    check_keys, continue_on_error, **opts)
+        database[self.collection].insert(obj, manipulate, safe,
+                                         check_keys, continue_on_error, **opts)
         return obj
 
     def read(self, criterion, database=None):
@@ -55,10 +52,7 @@ class MongoBase(object):
             msg = 'Many results for: %s' % criterion
             raise MultipleResultsFound(msg)
 
-        obj = self.class_(**docs[0])
-        set_obj_collection(obj, database[self.collection])
-
-        return obj
+        return self.class_(**docs[0])
 
     def search(self, database=None,
                criterion=None, sort=None, start=None, limit=None):
@@ -72,10 +66,8 @@ class MongoBase(object):
         if limit is None:
             limit = 0
 
-        collection = database[self.collection]
-        docs = collection.find(criterion, skip=start, limit=limit, sort=sort)
-
-        return docs
+        return database[self.collection].find(criterion, skip=start,
+                                              limit=limit, sort=sort)
 
     def update(self, database=None, **kwargs):
 
@@ -86,7 +78,7 @@ class MongoBase(object):
             raise TypeError('You must provide an ObjectId.')
 
         obj = self.class_(**kwargs)
-        obj.save(self.database)
+        database[self.collection].save(obj)
 
         return obj
 
@@ -95,8 +87,4 @@ class MongoBase(object):
         if database is None:
             database = self.database
 
-        if '_id' not in kwargs:
-            raise TypeError('You must provide an ObjectId.')
-
-        obj = self.class_(**kwargs)
-        obj.delete(self.database)
+        return database[self.collection].remove(self.class_(**kwargs))
