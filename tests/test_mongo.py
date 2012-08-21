@@ -24,10 +24,14 @@ class TestMongoModule(unittest.TestCase):
         self.mongod.start()
         self.connection = None
         self.connection = Connection(auto_start_request=False)
+        counter = 0
         while(self.connection is None):
             try:
                 self.connection = Connection(auto_start_request=False)
             except (AutoReconnect, ConnectionFailure):
+                if counter > 1000:
+                    break
+
                 continue
             else:
                 self.connection.start_request()

@@ -49,3 +49,23 @@ class Account(Document):
     username = String()
     password = String()
     #groups = EmbeddedList(Group, missing=list, default=list)
+
+
+class MenuItem(Document):
+    label = String()
+    url = String()
+    #children = EmbeddedList(MenuItem)
+
+
+# Avoid circular dep.
+MenuItem.children = EmbeddedList(MenuItem)
+
+
+class MenuTranslation(Document):
+    language = String()
+    items = EmbeddedList(MenuItem)
+
+
+class Menu(Document):
+    name = String()
+    translations = EmbeddedList(MenuTranslation)

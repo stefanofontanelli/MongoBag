@@ -21,13 +21,13 @@ class DocumentMetaClass(type):
 
     _COLLECTION = '__collection__'
     _REGISTRY = '__registry__'
-    _SCHEMA = '__schema__'
     _VALIDATOR = '__validator__'
 
     def __new__(cls, name, bases, attrs):
 
         if '_id' not in attrs:
-            attrs['_id'] = ObjectId()
+            attrs['_id'] = ObjectId(missing=colander.null,
+                                    default=colander.null)
 
         if cls._COLLECTION not in attrs:
             attrs[cls._COLLECTION] = name.lower()
@@ -36,17 +36,11 @@ class DocumentMetaClass(type):
             attrs[cls._VALIDATOR] = None
 
         if cls._REGISTRY not in attrs:
-            attrs[cls._REGISTRY] = Registry(cls, bases, attrs)
-
-        if cls._SCHEMA not in attrs:
-            attrs[cls._SCHEMA] = attrs[cls._REGISTRY].schema
-
-        for field in attrs[cls._REGISTRY].fields:
-            attrs[field] = getattr(mongoq.Q, field)
+            attrs[cls._REGISTRY] = None
 
         def __new__(cls, **kwargs):
             try:
-                kwargs = getattr(cls, cls._SCHEMA).deserialize(kwargs)
+                kwargs = getattr(cls, cls._REGISTRY).schema.deserialize(kwargs)
 
             except colander.Invalid as e:
                 if e.msg and e.msg.startswith('Unrecognized keys in mapping'):
@@ -97,22 +91,7 @@ class DocumentMetaClass(type):
 
         def serialize(self):
             registry = getattr(self, self.__class__._REGISTRY)
-            serialized = {}
-            for name in registry.fields:
-
-                value = getattr(self, name, None)
-
-                if name == '_id' and value is None:
-                    continue
-
-                value = registry.schema[name].serialize(value)
-
-                if value is colander.null:
-                    continue
-
-                serialized[name] = value
-
-            return serialized
+            return registry.schema.serialize(self._kwargs)
 
         attrs['serialize'] = serialize
 
@@ -121,7 +100,12 @@ class DocumentMetaClass(type):
     def __init__(cls, name, bases, attrs):
         type.__init__(cls, name, bases, attrs)
         # Bind Registry to cls.
-        getattr(cls, cls._REGISTRY).class_ = cls
+        if getattr(cls, cls._REGISTRY) is None:
+            type.__setattr__(cls, cls._REGISTRY, Registry(cls, bases, attrs))
+
+        fields = getattr(cls, cls._REGISTRY).fields
+        for name in fields:
+            type.__setattr__(cls, name, getattr(mongoq.Q, name))
 
     def __setattr__(cls, name, value):
 

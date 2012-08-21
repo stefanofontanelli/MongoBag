@@ -5,7 +5,7 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
 from .fields import Field
-import colander
+from .fields import Document
 
 
 def get_cls_collection(cls):
@@ -14,12 +14,12 @@ def get_cls_collection(cls):
 
 class Registry(object):
 
-    def __init__(self, meta, bases, attrs):
+    def __init__(self, class_, bases, attrs):
 
-        self.class_ = None
-        typ = colander.Mapping(unknown='raise')
-        self.schema = colander.SchemaNode(typ,
-                                          validator=attrs[meta._VALIDATOR])
+        self.class_ = class_
+        self.validator = attrs[class_.__class__._VALIDATOR]
+        object.__setattr__(self, 'schema',
+                           Document(self.class_, validator=self.validator))
         self.fields = set()
 
         for base in bases:

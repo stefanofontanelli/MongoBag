@@ -148,19 +148,121 @@ class Time(Field):
         return Field.deserialize(self, cstruct)
 
 
+class Document(Field):
+
+    def __init__(self, class_, *fields, **kwargs):
+        self.class_ = class_
+        Field.__init__(self,
+                       colander.Mapping(unknown='raise'), *fields, **kwargs)
+
+    def serialize(self, appstruct):
+
+        if not isinstance(self.default,
+                          colander.deferred) and callable(self.default):
+
+            default = self.default()
+
+        else:
+            default = self.default
+
+        if appstruct is colander.null:
+            appstruct = default
+
+        if isinstance(appstruct, colander.deferred):
+            appstruct = colander.null
+
+        if appstruct is colander.null:
+            raise ValueError('Cannot serialize null object.')
+
+        cstruct = self.typ.serialize(self, appstruct)
+        return {name: cstruct[name]
+                for name in cstruct
+                if cstruct[name] != colander.null}
+
+    def deserialize(self, cstruct):
+        appstruct = Field.deserialize(self, cstruct)
+        return {name: appstruct[name]
+                for name in appstruct
+                if appstruct[name] != colander.null}
+
+    def clone(self):
+        cloned = self.__class__(self.class_)
+        cloned.__dict__.update(self.__dict__)
+        cloned.children = [node.clone() for node in self.children]
+        return cloned
+
+
 class Embedded(Field):
 
-    def __init__(self, typ, **kwargs):
-        self.Document = typ
+    def __init__(self, class_, **kwargs):
+
+        self.class_ = class_
+
         try:
-            self.schema = getattr(typ, typ.__class__._SCHEMA).clone()
-            if '_id' in self.schema:
-                self.schema.__delitem__('_id')
+            getattr(class_, class_.__class__._REGISTRY)
 
         except AttributeError:
-            raise ValueError('%s is not a document.' % typ.__name__)
+            raise ValueError('%s is not a document.' % class_.__name__)
 
-        Field.__init__(self, colander.Mapping, *self.schema.children, **kwargs)
+        Field.__init__(self, colander.Mapping(unknown='raise'), **kwargs)
+
+    def serialize(self, appstruct):
+
+        if not isinstance(self.default,
+                          colander.deferred) and callable(self.default):
+
+            default = self.default()
+
+        else:
+            default = self.default
+
+        if appstruct is colander.null:
+            appstruct = default
+
+        if isinstance(appstruct, colander.deferred):
+            appstruct = colander.null
+
+        if appstruct is colander.null:
+            return appstruct
+
+        if not isinstance(appstruct, self.class_):
+            raise TypeError('Cannot serialize type: %s' % type(appstruct))
+
+        # appstruct is an object of self.class_
+        return appstruct.serialize()
+
+    def deserialize(self, cstruct=colander.null):
+
+        if cstruct is colander.null or isinstance(cstruct, self.class_):
+            return cstruct
+
+        # Try deserilization on self.cls and all subclasses!
+        results = {}
+        error = None
+        for class_ in [self.class_] + self.class_.__all_subclasses__():
+            registry = getattr(class_, class_.__class__._REGISTRY)
+            # Calculate set of common fields between cstruct and class_.
+            common = frozenset(set(cstruct.keys()) & registry.fields)
+            try:
+                results[common] = class_(**cstruct)
+
+            except colander.Invalid as e:
+                error = e
+                continue
+
+        if not results:
+            raise e
+
+        # Return the instance of class with maximum number of common fields.
+        scores = {len(set_):set_ for set_ in results.keys()}
+        key = max(scores.keys())
+        return results[scores[key]]
+
+    def clone(self):
+        cloned = self.__class__(self.class_)
+        cloned.__dict__.update(self.__dict__)
+        cloned.children = [node.clone() for node in self.children]
+        return cloned
 
 
 class EmbeddedList(Field):
