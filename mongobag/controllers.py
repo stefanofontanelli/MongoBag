@@ -52,7 +52,7 @@ class MongoBase(object):
             msg = 'Many results for: %s' % criterion
             raise MultipleResultsFound(msg)
 
-        return self.class_(**docs[0])
+        return docs[0]
 
     def search(self, database=None,
                criterion=None, sort=None, start=None, limit=None):

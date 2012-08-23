@@ -76,10 +76,10 @@ class Collection(PyMongoCollection):
             doc_or_docs = [doc_or_docs]
 
         try:
-            docs = [doc.serialize() for doc in doc_or_docs]
+            docs = [doc.asdict() for doc in doc_or_docs]
 
         except AttributeError:
-            raise TypeError("Wrong document: cannot find serialize method.")
+            raise TypeError("Wrong document: cannot find asdict method.")
 
         ids = PyMongoCollection.insert(self, docs, manipulate, safe, check_keys,
                                        continue_on_error, **kwargs)
@@ -100,21 +100,21 @@ class Collection(PyMongoCollection):
         if not isinstance(document, Document):
             raise TypeError("cannot save object of type %s" % type(document))
 
-        return PyMongoCollection.update(self, spec, document.serialize(),
+        return PyMongoCollection.update(self, spec, document.asdict(),
                                         upsert, manipulate, safe, multi,
                                         _check_keys, **kwargs)
 
     def remove(self, spec_or_id=None, safe=False, **kwargs):
 
         if isinstance(spec_or_id, Document):
-            spec_or_id = spec_or_id.serialize()
+            spec_or_id = spec_or_id.asdict()
 
         return PyMongoCollection.remove(self, spec_or_id, safe, **kwargs)
 
     def find_one(self, spec_or_id=None, *args, **kwargs):
 
         if isinstance(spec_or_id, Document):
-            spec_or_id = spec_or_id.serialize()
+            spec_or_id = spec_or_id.asdict()
 
         doc = PyMongoCollection.find_one(self, spec_or_id, *args, **kwargs)
 
@@ -129,7 +129,7 @@ class Collection(PyMongoCollection):
     def find(self, spec=None, *args, **kwargs):
 
         if isinstance(spec, Document):
-            spec = spec.serialize()
+            spec = spec.asdict()
 
         if not 'slave_okay' in kwargs:
             kwargs['slave_okay'] = self.slave_okay
@@ -160,7 +160,7 @@ class Collection(PyMongoCollection):
     def find_and_modify(self, query={}, update=None, upsert=False, **kwargs):
 
         if isinstance(update, Document):
-            doc = update.serialize()
+            doc = update.asdict()
 
         doc = PyMongoCollection.find_and_modify(self, query,
                                                 doc, upsert, **kwargs)

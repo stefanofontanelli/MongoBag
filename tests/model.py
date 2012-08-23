@@ -2,8 +2,7 @@ from mongobag import Boolean
 from mongobag import Date
 from mongobag import DateTime
 from mongobag import Document
-from mongobag import DocumentMetaClass
-from mongobag import Embedded
+from mongobag import EmbeddedDocument
 from mongobag import EmbeddedList
 from mongobag import Float
 from mongobag import Integer
@@ -26,8 +25,8 @@ class MainDocument(Document):
     datetime = DateTime()
     date = Date()
     time = Time()
-    #embedded = Embedded(DummyDocument, missing=None)
-    #embedded_list = EmbeddedList(DummyDocument, missing=list)
+    ed = EmbeddedDocument(DummyDocument)
+    edl = EmbeddedList(DummyDocument)
 
 
 class MixinDocument(DummyDocument, MainDocument):
@@ -48,21 +47,26 @@ class Account(Document):
     surname = String()
     username = String()
     password = String()
-    #groups = EmbeddedList(Group, missing=list, default=list)
+    groups = EmbeddedList(Group, missing=list, default=list)
 
 
 class MenuItem(Document):
     label = String()
     url = String()
-    #children = EmbeddedList(MenuItem)
+    # children = EmbeddedList(MenuItem)
 
 
-# Avoid circular dep.
 MenuItem.children = EmbeddedList(MenuItem)
 
 
+class Language(Document):
+    name = String()
+    code = String(validator=colander.Length(min=2, max=2))
+    country = String(validator=colander.Length(min=2, max=2))
+
+
 class MenuTranslation(Document):
-    language = String()
+    language = EmbeddedDocument(Language)
     items = EmbeddedList(MenuItem)
 
 

@@ -10,7 +10,7 @@ from .declarative import DocumentMetaClass
 from .fields import Boolean
 from .fields import Date
 from .fields import DateTime
-from .fields import Embedded
+from .fields import EmbeddedDocument
 from .fields import EmbeddedList
 from .fields import Field
 from .fields import Float
@@ -38,7 +38,7 @@ __all__ = [
     'DateTime',
     'Document',
     'DocumentMetaClass',
-    'Embedded',
+    'EmbeddedDocument',
     'EmbeddedList',
     'Field',
     'Float',

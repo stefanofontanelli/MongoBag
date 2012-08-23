@@ -7,11 +7,9 @@
 import logging
 import subprocess
 import unittest
-from multiprocessing import Process
+#from multiprocessing import Process
 from mongobag import Connection
 from mongobag import NoResultFound
-from pymongo.errors import AutoReconnect
-from pymongo.errors import ConnectionFailure
 
 
 log = logging.getLogger(__name__)
@@ -20,22 +18,12 @@ log = logging.getLogger(__name__)
 class TestMongoModule(unittest.TestCase):
 
     def setUp(self):
-        self.mongod = Process(target=self.start_mongo_server)
-        self.mongod.start()
+        #self.mongod = Process(target=self.start_mongo_server)
+        #self.mongod.start()
         self.connection = None
         self.connection = Connection(auto_start_request=False)
-        counter = 0
-        while(self.connection is None):
-            try:
-                self.connection = Connection(auto_start_request=False)
-            except (AutoReconnect, ConnectionFailure):
-                if counter > 1000:
-                    break
-
-                continue
-            else:
-                self.connection.start_request()
-
+        self.connection = Connection(auto_start_request=False)
+        self.connection.start_request()
         self.database_name = 'test'
         self.database = self.connection[self.database_name]
 
@@ -43,7 +31,7 @@ class TestMongoModule(unittest.TestCase):
         self.connection.drop_database(self.database_name)
         self.connection.end_request()
         self.connection.close()
-        self.mongod.terminate()
+        #self.mongod.terminate()
 
     def start_mongo_server(self):
         #mongod run --config /usr/local/etc/mongod.conf
@@ -91,7 +79,7 @@ class TestMongoModule(unittest.TestCase):
         self.assertEqual(account._id, None)
         collection.save(account)
         self.assertEqual(isinstance(account._id, ObjectId), True)
-        old_account = Account(**account.serialize())
+        old_account = Account(**account.asdict())
         account.name = 'My New Name'
         account.surname = 'My New Surname'
         account.username = 'MyNewUsername'

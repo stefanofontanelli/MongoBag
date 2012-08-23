@@ -65,3 +65,11 @@ class Registry(object):
         self.fields.add(name)
         value.name = name
         self.schema.add(value)
+
+    def __delattr__(self, name):
+
+        if name not in self.fields:
+            object.__delattr__(self, name)
+
+        self.fields.remove(name)
+        del self.schema[name]

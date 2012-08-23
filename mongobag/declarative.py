@@ -38,37 +38,33 @@ class DocumentMetaClass(type):
         if cls._REGISTRY not in attrs:
             attrs[cls._REGISTRY] = None
 
-        def __new__(cls, **kwargs):
+        def __init__(self, **kwargs):
             try:
-                kwargs = getattr(cls, cls._REGISTRY).schema.deserialize(kwargs)
+                registry = getattr(self, self.__class__._REGISTRY)
+                self._values = registry.schema.deserialize(kwargs)
 
             except colander.Invalid as e:
                 if e.msg and e.msg.startswith('Unrecognized keys in mapping'):
                     msg = 'Unrecognized keyword arguments for {}: {}'
-                    raise TypeError(msg.format(e.node.name,
-                                               e.msg.mapping['val'].keys()))
+                    msg = msg.format(e.node.name or self.__class__.__name__,
+                                     e.msg.mapping['val'])
+                    raise TypeError(msg)
                 raise e
-            return object.__new__(cls, **kwargs)
-
-        attrs['__new__'] = __new__
-
-        def __init__(self, **kwargs):
-            self._kwargs = kwargs
 
         attrs['__init__'] = __init__
 
         def __getattribute__(self, name):
 
             try:
-                _kwargs = object.__getattribute__(self, '_kwargs')
+                values = object.__getattribute__(self, '_values')
 
             except AttributeError:
-                _kwargs = {}
+                values = {}
 
             registry = object.__getattribute__(self, '__class__')._REGISTRY
             registry = object.__getattribute__(self, registry)
             if name in registry.fields:
-                return _kwargs.get(name)
+                return values.get(name)
 
             return object.__getattribute__(self, name)
 
@@ -78,22 +74,27 @@ class DocumentMetaClass(type):
 
             registry = getattr(self, self.__class__._REGISTRY)
             if name in registry.fields:
-                self._kwargs[name] = registry.schema[name].deserialize(value)
+                self._values[name] = registry.schema[name].deserialize(value)
 
             object.__setattr__(self, name, value)
 
         attrs['__setattr__'] = __setattr__
 
         def __eq__(self, other):
-            return self.serialize() == other.serialize()
+            return self.asdict() == other.asdict()
 
         attrs['__eq__'] = __eq__
 
-        def serialize(self):
-            registry = getattr(self, self.__class__._REGISTRY)
-            return registry.schema.serialize(self._kwargs)
+        def __repr__(self):
+            return "<%s %s>" % (self.__class__.__name__, self._values)
 
-        attrs['serialize'] = serialize
+        attrs['__repr__'] = __repr__
+
+        def asdict(self):
+            registry = getattr(self, self.__class__._REGISTRY)
+            return registry.schema.serialize(self._values)
+
+        attrs['asdict'] = asdict
 
         return type.__new__(cls, name, bases, attrs)
 

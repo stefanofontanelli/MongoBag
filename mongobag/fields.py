@@ -16,6 +16,9 @@ __all__ = []
 log = logging.getLogger(__file__)
 
 
+unassigned = colander.null
+
+
 class Field(colander.SchemaNode):
     """Base class for fields. """
 
@@ -192,7 +195,7 @@ class Document(Field):
         return cloned
 
 
-class Embedded(Field):
+class EmbeddedDocument(Field):
 
     def __init__(self, class_, **kwargs):
 
@@ -206,7 +209,7 @@ class Embedded(Field):
 
         Field.__init__(self, colander.Mapping(unknown='raise'), **kwargs)
 
-    def serialize(self, appstruct):
+    def serialize(self, appstruct=colander.null):
 
         if not isinstance(self.default,
                           colander.deferred) and callable(self.default):
@@ -222,18 +225,41 @@ class Embedded(Field):
         if isinstance(appstruct, colander.deferred):
             appstruct = colander.null
 
-        if appstruct is colander.null:
-            return appstruct
+        if isinstance(appstruct, self.class_):
+            # appstruct is an object of self.class_
+            appstruct = appstruct.asdict()
 
-        if not isinstance(appstruct, self.class_):
-            raise TypeError('Cannot serialize type: %s' % type(appstruct))
+        if '_id' in appstruct:
+            appstruct.pop('_id')
 
-        # appstruct is an object of self.class_
-        return appstruct.serialize()
+        return appstruct
 
     def deserialize(self, cstruct=colander.null):
 
-        if cstruct is colander.null or isinstance(cstruct, self.class_):
+        if isinstance(cstruct, self.class_):
+            return cstruct
+
+        if cstruct is colander.null:
+
+            if not isinstance(self.missing,
+                              colander.deferred) and callable(self.missing):
+
+                missing = self.missing()
+
+            else:
+                missing = self.missing
+
+            appstruct = missing
+
+            if appstruct is colander.required:
+                raise colander.Invalid(self, colander._('Required'))
+
+            if isinstance(appstruct, colander.deferred):
+                raise colander.Invalid(self, colander._('Required'))
+
+            return appstruct
+
+        if cstruct is None:
             return cstruct
 
         # Try deserilization on self.cls and all subclasses!
@@ -244,7 +270,7 @@ class Embedded(Field):
             # Calculate set of common fields between cstruct and class_.
             common = frozenset(set(cstruct.keys()) & registry.fields)
             try:
-                results[common] = class_(**cstruct)
+                results[common] = class_(**cstruct.copy())
 
             except colander.Invalid as e:
                 error = e
@@ -256,7 +282,16 @@ class Embedded(Field):
         # Return the instance of class with maximum number of common fields.
         scores = {len(set_):set_ for set_ in results.keys()}
         key = max(scores.keys())
-        return results[scores[key]]
+        appstruct = results[scores[key]]
+
+        if self.preparer is not None:
+            appstruct = self.preparer(appstruct)
+
+        if self.validator is not None:
+            if not isinstance(self.validator, colander.deferred):
+                self.validator(self, appstruct)
+
+        return appstruct
 
     def clone(self):
         cloned = self.__class__(self.class_)
@@ -267,8 +302,15 @@ class Embedded(Field):
 
 class EmbeddedList(Field):
 
-    def __init__(self, typ, **kwargs):
-        Field.__init__(self, colander.Sequence(False), Embedded(typ), **kwargs)
+    def __init__(self, class_, **kwargs):
+        self.class_ = class_
+        Field.__init__(self, colander.Sequence(False),
+                       EmbeddedDocument(class_), **kwargs)
 
+    def clone(self):
+        cloned = self.__class__(self.class_)
+        cloned.__dict__.update(self.__dict__)
+        cloned.children = [node.clone() for node in self.children]
+        return cloned
 
 # FIXME: add class Reference and list of Reference ?

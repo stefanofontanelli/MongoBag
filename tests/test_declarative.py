@@ -109,17 +109,16 @@ class TestFields(unittest.TestCase):
         self.assertEqual(field.deserialize(value), value)
 
     def test_embedded(self):
-        from mongobag import Embedded
+        from mongobag import EmbeddedDocument
         from .model import DummyDocument
 
-        field = Embedded(DummyDocument)
+        field = EmbeddedDocument(DummyDocument)
         value = DummyDocument(name='Dummy Document')
         params = dict(name=value.name)
         self.assertEqual(field.serialize(value), params)
         self.assertEqual(field.deserialize(value), value)
         self.assertEqual(field.serialize(field.deserialize(params)), params)
 
-    """
     def test_embedded_list(self):
         from mongobag import EmbeddedList
         from .model import DummyDocument
@@ -129,10 +128,9 @@ class TestFields(unittest.TestCase):
         value = [doc, doc, doc]
         serialized = dict(name=doc.name)
         list_ = [serialized, serialized, serialized]
-        self.assertEqual(field.serialize(value), list_)
+        self.assertEqual(field.serialize(value), value)
         self.assertEqual(field.deserialize(value), value)
-        self.assertEqual(field.serialize(field.deserialize(list_)), list_)
-    """
+        self.assertEqual(field.serialize(field.deserialize(list_)), value)
 
 
 class TestDocument(unittest.TestCase):
@@ -148,10 +146,10 @@ class TestDocument(unittest.TestCase):
         from mongobag import String
         self.assertRaises(AttributeError, setattr, MainDocument, 'string', String())
 
-    def test_document_serialize(self):
+    def test_document_asdict(self):
         from .model import DummyDocument
         value = DummyDocument(name='Dummy Document')
-        self.assertEqual(value.serialize(), {'name': value.name})
+        self.assertEqual(value.asdict(), {'name': value.name})
 
     def test_get_cls_collection(self):
         from .model import DummyDocument
@@ -159,9 +157,12 @@ class TestDocument(unittest.TestCase):
         get_cls_collection(DummyDocument)
 
     def test_document_init(self):
+        from .model import DummyDocument
         from .model import MainDocument
         import colander
         import datetime
+        params = {}
+        self.assertRaises(colander.Invalid, DummyDocument, **params)
         self.assertEqual(getattr(MainDocument, MainDocument._COLLECTION),
                          'maindocument')
         self.assertEqual(getattr(MainDocument, MainDocument._VALIDATOR), None)
@@ -184,6 +185,16 @@ class TestDocument(unittest.TestCase):
                       datetime=datetime.datetime.now(),
                       date=datetime.date.today(),
                       time=datetime.datetime.now().time())
+        self.assertRaises(colander.Invalid, MainDocument, **params)
+        params = dict(integer=5,
+                      string='teststring',
+                      boolean=False,
+                      float=0.5,
+                      datetime=datetime.datetime.now(),
+                      date=datetime.date.today(),
+                      time=datetime.datetime.now().time(),
+                      ed=None,
+                      edl=[])
         doc = MainDocument(**params)
         self.assertEqual(doc.string, params['string'])
         self.assertRaises(colander.Invalid, setattr, doc, 'integer', 'astring')

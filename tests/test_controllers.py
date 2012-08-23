@@ -7,29 +7,20 @@
 import logging
 import subprocess
 import unittest
-from multiprocessing import Process
-from pymongo import Connection
-from pymongo.errors import AutoReconnect
-from pymongo.errors import ConnectionFailure
+#from multiprocessing import Process
+from mongobag import Connection
 
 
 log = logging.getLogger(__name__)
 
-"""
+
 class TestMongoBase(unittest.TestCase):
 
     def setUp(self):
-        self.mongod = Process(target=self.start_mongo_server)
-        self.mongod.start()
-        self.connection = None
-        while(self.connection is None):
-            try:
-                self.connection = Connection(auto_start_request=False)
-            except (AutoReconnect, ConnectionFailure):
-                continue
-            else:
-                self.connection.start_request()
-
+        #self.mongod = Process(target=self.start_mongo_server)
+        #self.mongod.start()
+        self.connection = Connection(auto_start_request=False)
+        self.connection.start_request()
         self.database_name = 'test'
         self.database = self.connection[self.database_name]
 
@@ -37,7 +28,7 @@ class TestMongoBase(unittest.TestCase):
         self.connection.drop_database(self.database_name)
         self.connection.end_request()
         self.connection.close()
-        self.mongod.terminate()
+        #self.mongod.terminate()
 
     def start_mongo_server(self):
         #mongod run --config /usr/local/etc/mongod.conf
@@ -45,9 +36,9 @@ class TestMongoBase(unittest.TestCase):
         subprocess.call(args)
 
     def test_crud(self):
-        from model import Account
+        from .model import Account
         from mongobag import MongoBase
-        from mongobag import get_obj_collection
+        from mongobag import get_cls_collection
         from mongobag import NoResultFound
 
         ctrl = MongoBase(Account, self.database)
@@ -55,13 +46,13 @@ class TestMongoBase(unittest.TestCase):
                               surname='My Surname',
                               username='My Username',
                               password='My Password')
-        obj = get_obj_collection(account).find_one()
-        self.assertEqual(account._id, obj['_id'])
+        obj = self.database[get_cls_collection(Account)].find_one()
+        self.assertEqual(account._id, obj._id)
         # Test MongoBase().read
         obj = ctrl.read(Account._id == account._id, self.database)
         self.assertEqual(account._id, obj._id)
         # Test MongoBase().update
-        obj = account.serialize()
+        obj = account.asdict()
         obj['name'] = 'My New Name'
         obj['surname'] = 'My New Surname'
         obj = ctrl.update(**obj)
@@ -70,8 +61,7 @@ class TestMongoBase(unittest.TestCase):
         self.assertNotEqual(account.surname, obj.surname)
         self.assertEqual(account.username, obj.username)
         self.assertEqual(account.password, obj.password)
-        doc = get_obj_collection(obj).find_one()
-        self.assertEqual(obj._id, doc['_id'])
-        ctrl.delete(self.database, **doc)
-        self.assertRaises(NoResultFound, ctrl.read, Account._id == doc['_id'], self.database)
-"""
+        doc = self.database[get_cls_collection(Account)].find_one()
+        self.assertEqual(obj._id, doc._id)
+        ctrl.delete(self.database, **doc.asdict())
+        self.assertRaises(NoResultFound, ctrl.read, Account._id == doc._id, self.database)
