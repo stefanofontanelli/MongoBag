@@ -122,7 +122,11 @@ class Collection(PyMongoCollection):
         if doc is None:
             raise NoResultFound('No result for: %s' % spec_or_id)
 
-        return doc
+        if isinstance(doc, Document) or \
+           self._documentClass is None:
+            return doc
+
+        return document_factory(self._documentClass, **doc)
 
     def find(self, spec=None, *args, **kwargs):
 
