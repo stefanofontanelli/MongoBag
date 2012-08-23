@@ -22,7 +22,6 @@ class TestMongoModule(unittest.TestCase):
         #self.mongod.start()
         self.connection = None
         self.connection = Connection(auto_start_request=False)
-        self.connection = Connection(auto_start_request=False)
         self.connection.start_request()
         self.database_name = 'test'
         self.database = self.connection[self.database_name]

@@ -6,6 +6,7 @@
 
 from .declarative import Document
 from .exc import NoResultFound
+from .utils import document_factory
 from .utils import get_cls_collection
 from pymongo.collection import Collection as PyMongoCollection
 import pymongo
@@ -121,10 +122,7 @@ class Collection(PyMongoCollection):
         if doc is None:
             raise NoResultFound('No result for: %s' % spec_or_id)
 
-        if isinstance(doc, Document) or self._documentClass is None:
-            return doc
-
-        return self._documentClass(**doc)
+        return doc
 
     def find(self, spec=None, *args, **kwargs):
 
@@ -138,40 +136,6 @@ class Collection(PyMongoCollection):
             kwargs['read_preference'] = self.read_preference
 
         return Cursor(self, spec, *args, **kwargs)
-
-    # TODO key and condition ought to be optional, but deprecation
-    # could be painful as argument order would have to change.
-    def group(self, key, condition, initial, reduce, finalize=None):
-        return PyMongoCollection.group(key, condition,
-                                       initial, reduce, finalize)
-
-    def inline_map_reduce(self, map, reduce, full_response=False, **kwargs):
-        res = PyMongoCollection.map_reduce(self, map, reduce,
-                                           full_response, **kwargs)
-        if full_response:
-            return res
-
-        elif self._documentClass is None:
-            return [doc for doc in res]
-
-        else:
-            return [self._documentClass(**doc) for doc in res]
-
-    def find_and_modify(self, query={}, update=None, upsert=False, **kwargs):
-
-        if isinstance(update, Document):
-            doc = update.asdict()
-
-        doc = PyMongoCollection.find_and_modify(self, query,
-                                                doc, upsert, **kwargs)
-
-        if doc is None or not kwargs.get('new'):
-            return update
-
-        if self._documentClass is None:
-            return doc
-
-        return self._documentClass(**doc)
 
 
 class Cursor(pymongo.cursor.Cursor):
@@ -190,8 +154,6 @@ class Cursor(pymongo.cursor.Cursor):
                                        read_preference, _must_use_master,
                                        _uuid_subtype, **kwargs)
 
-        #msg = 'collection: %s, %s' % (collection, dir(collection))
-        #raise Exception(msg)
         self._documentClass = collection._documentClass
 
     def clone(self):
@@ -223,7 +185,7 @@ class Cursor(pymongo.cursor.Cursor):
            self._documentClass is None:
             return item
 
-        return self._documentClass(**item)
+        return document_factory(self._documentClass, **item)
 
     def next(self):
         doc = pymongo.cursor.Cursor.next(self)
@@ -232,4 +194,4 @@ class Cursor(pymongo.cursor.Cursor):
            self._documentClass is None:
             return doc
 
-        return self._documentClass(**doc)
+        return document_factory(self._documentClass, **doc)

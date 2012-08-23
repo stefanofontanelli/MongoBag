@@ -4,12 +4,42 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-from .fields import Field
-from .fields import Document
+import colander
 
 
 def get_cls_collection(cls):
     return getattr(cls, cls._COLLECTION)
+
+
+def document_factory(cls, **kwargs):
+    results = {}
+    for class_ in [cls] + cls.__all_subclasses__():
+
+        if getattr(class_, class_._ABSTRACT, None):
+            continue
+
+        registry = getattr(class_, class_.__class__._REGISTRY)
+        # Calculate set of common fields between cstruct and class_.
+        common = frozenset(set(kwargs.keys()) & registry.fields)
+        try:
+            results[common] = class_(**kwargs)
+
+        except (colander.Invalid, TypeError) as e:
+            continue
+
+    if not results:
+        msg = 'Not found any class/subclass of {} that match {}'
+        schema = getattr(cls, cls._REGISTRY).schema
+        raise colander.Invalid(schema, msg.format(cls.__name__, kwargs))
+
+    # Return the instance of class with maximum number of common fields.
+    scores = {len(set_):set_ for set_ in results.keys()}
+    key = max(scores.keys())
+    return results[scores[key]]
+
+
+from .schemas import Field
+from .schemas import Document
 
 
 class Registry(object):

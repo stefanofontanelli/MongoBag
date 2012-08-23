@@ -4,11 +4,12 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-from .fields import ObjectId
+from .schemas import ObjectId
 from .utils import Registry
 import colander
 import logging
 import mongoq
+import warnings
 
 
 __all__ = []
@@ -19,24 +20,28 @@ log = logging.getLogger(__file__)
 
 class DocumentMetaClass(type):
 
+    _ABSTRACT = '__abstract__'
     _COLLECTION = '__collection__'
     _REGISTRY = '__registry__'
     _VALIDATOR = '__validator__'
 
     def __new__(cls, name, bases, attrs):
 
-        if '_id' not in attrs:
-            attrs['_id'] = ObjectId(missing=colander.null,
-                                    default=colander.null)
-
-        if cls._COLLECTION not in attrs:
-            attrs[cls._COLLECTION] = name.lower()
+        if cls._ABSTRACT not in attrs:
+            attrs[cls._ABSTRACT] = False
 
         if cls._VALIDATOR not in attrs:
             attrs[cls._VALIDATOR] = None
 
         if cls._REGISTRY not in attrs:
             attrs[cls._REGISTRY] = None
+
+        if len([base
+                for base in bases
+                if isinstance(base, cls) and \
+                   getattr(base, base._COLLECTION, None)]) > 1:
+            msg = 'Multiple base classes of {} define {}.'
+            warnings.warn(msg.format(name, cls._COLLECTION), SyntaxWarning)
 
         def __init__(self, **kwargs):
             try:
@@ -99,7 +104,18 @@ class DocumentMetaClass(type):
         return type.__new__(cls, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs):
+
         type.__init__(cls, name, bases, attrs)
+
+        abstract = getattr(cls, cls._ABSTRACT)
+
+        if not abstract and getattr(cls, cls._COLLECTION, None) is None:
+            # Add a default name for documents collection.
+            type.__setattr__(cls, cls._COLLECTION, cls.__name__.lower())
+
+        if not abstract and getattr(cls, '_id', None) is None:
+            raise TypeError('Not abstract classes must have an _id field.')
+
         # Bind Registry to cls.
         if getattr(cls, cls._REGISTRY) is None:
             type.__setattr__(cls, cls._REGISTRY, Registry(cls, bases, attrs))
@@ -116,8 +132,7 @@ class DocumentMetaClass(type):
 
         if not hasattr(value, 'serialize') or \
            not hasattr(value, 'deserialize'):
-            type.__setattr__(cls, name, value)
-            return None
+            return type.__setattr__(cls, name, value)
 
         for class_ in [cls] + cls.__all_subclasses__():
             registry = getattr(class_, class_._REGISTRY)
@@ -131,4 +146,7 @@ class DocumentMetaClass(type):
                                          for g in s.__all_subclasses__()]
 
 
-Document = DocumentMetaClass('Document', (object,), {})
+Document = DocumentMetaClass('Document', (object,), {
+    DocumentMetaClass._ABSTRACT: True,
+    '_id': ObjectId(missing=colander.null, default=colander.null)
+})

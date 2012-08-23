@@ -5,6 +5,7 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
 from .types import ObjectId as objectid
+from .utils import document_factory
 import colander
 import datetime
 import logging
@@ -262,27 +263,7 @@ class EmbeddedDocument(Field):
         if cstruct is None:
             return cstruct
 
-        # Try deserilization on self.cls and all subclasses!
-        results = {}
-        error = None
-        for class_ in [self.class_] + self.class_.__all_subclasses__():
-            registry = getattr(class_, class_.__class__._REGISTRY)
-            # Calculate set of common fields between cstruct and class_.
-            common = frozenset(set(cstruct.keys()) & registry.fields)
-            try:
-                results[common] = class_(**cstruct.copy())
-
-            except colander.Invalid as e:
-                error = e
-                continue
-
-        if not results:
-            raise e
-
-        # Return the instance of class with maximum number of common fields.
-        scores = {len(set_):set_ for set_ in results.keys()}
-        key = max(scores.keys())
-        appstruct = results[scores[key]]
+        appstruct = document_factory(self.class_, **cstruct)
 
         if self.preparer is not None:
             appstruct = self.preparer(appstruct)
