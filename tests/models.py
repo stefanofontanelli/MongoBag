@@ -11,9 +11,9 @@ from mongobag import Time
 import colander
 
 
-class DummyDocument(Document):
+class SimpleDocument(Document):
 
-    __collection__ = 'dummydocument'
+    __collection__ = 'simple_documents'
 
     name = String()
 
@@ -26,18 +26,25 @@ class MainDocument(Document):
     integer = Integer()
     boolean = Boolean()
     float = Float()
-    datetime = DateTime()
-    date = Date()
-    time = Time()
-    ed = EmbeddedDocument(DummyDocument)
-    edl = EmbeddedList(DummyDocument)
+    datetime = DateTime(missing=colander.null,
+                        default=colander.null)
+    date = Date(missing=colander.null,
+                default=colander.null)
+    time = Time(missing=colander.null,
+                default=colander.null)
+    ed = EmbeddedDocument(SimpleDocument,
+                          missing=colander.null,
+                          default=colander.null)
+    edl = EmbeddedList(SimpleDocument,
+                       missing=colander.null,
+                       default=colander.null)
 
 
-class MixinDocument(DummyDocument, MainDocument):
+class MixinDocument(SimpleDocument, MainDocument):
     mixinfield = String()
 
 
-DummyDocument.description = String(missing=colander.null, default=colander.null)
+SimpleDocument.description = String(missing=colander.null, default=colander.null)
 
 
 class Group(Document):

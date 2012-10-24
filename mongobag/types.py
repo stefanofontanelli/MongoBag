@@ -26,7 +26,7 @@ class ObjectId(object):
         if not isinstance(value, bson.objectid.ObjectId):
             raise colander.Invalid(node, '%s is not an ObjectId' % value)
 
-        return value
+        return str(value)
 
     def deserialize(self, node, value):
 

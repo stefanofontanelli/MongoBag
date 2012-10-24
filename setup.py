@@ -20,7 +20,7 @@ setup(name='MongoBag',
       install_requires=[
           # -*- Extra requirements: -*-
           'pymongo',
-          'colander',
+          'colander >= 0.9.9',
           'mongoq'
       ],
       entry_points="""

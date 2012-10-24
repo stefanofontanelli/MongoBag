@@ -4,149 +4,388 @@
 # This module is part of MongoBag and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-from .schemas import ObjectId
-from .utils import Registry
+from .exc import (DocumentAttributeError,
+                  NoResultFound,
+                  DocumentTypeError)
+from .schemas import (Field,
+                      EmbeddedDocument,
+                      EmbeddedList,
+                      ObjectId)
 import colander
 import logging
 import mongoq
 import warnings
 
 
-__all__ = []
+__all__ = ['DocumentMeta', 'Document']
 
 
 log = logging.getLogger(__file__)
 
 
-class DocumentMetaClass(type):
-
-    _ABSTRACT = '__abstract__'
-    _COLLECTION = '__collection__'
-    _REGISTRY = '__registry__'
-    _VALIDATOR = '__validator__'
+class DocumentMeta(type):
 
     def __new__(cls, name, bases, attrs):
 
-        if cls._ABSTRACT not in attrs:
-            attrs[cls._ABSTRACT] = False
+        # The "constant" below are used by mongobag to store information.
+        _ABSTRACT = '__abstract__'  # identify no persistent document class.
+        _COLLECTION = '__collection__'  # collection name/object of the document.
+        _SCHEMA = '__schema__'  # Colander schema object.
 
-        if cls._VALIDATOR not in attrs:
-            attrs[cls._VALIDATOR] = None
-
-        if cls._REGISTRY not in attrs:
-            attrs[cls._REGISTRY] = None
+        if _ABSTRACT not in attrs:
+            attrs[_ABSTRACT] = False
 
         if len([base
                 for base in bases
                 if isinstance(base, cls) and \
-                   getattr(base, base._COLLECTION, None)]) > 1:
+                   getattr(base, _COLLECTION, None)]) > 1:
             msg = 'Multiple base classes of {} define {}.'
-            warnings.warn(msg.format(name, cls._COLLECTION), SyntaxWarning)
+            warnings.warn(msg.format(name, _COLLECTION), SyntaxWarning)
 
-        def __init__(self, **kwargs):
-            try:
-                registry = getattr(self, self.__class__._REGISTRY)
-                self._values = registry.schema.deserialize(kwargs)
+        class_ = type.__new__(cls, name, bases, attrs)
+        type.__setattr__(class_, '_ABSTRACT', _ABSTRACT)
+        type.__setattr__(class_, '_COLLECTION', _COLLECTION)
+        type.__setattr__(class_, '_SCHEMA', _SCHEMA)
 
-            except colander.Invalid as e:
-                if e.msg and e.msg.startswith('Unrecognized keys in mapping'):
-                    msg = 'Unrecognized keyword arguments for {}: {}'
-                    msg = msg.format(e.node.name or self.__class__.__name__,
-                                     e.msg.mapping['val'])
-                    raise TypeError(msg)
-                raise e
-
-        attrs['__init__'] = __init__
-
-        def __getattribute__(self, name):
-
-            try:
-                values = object.__getattribute__(self, '_values')
-
-            except AttributeError:
-                values = {}
-
-            registry = object.__getattribute__(self, '__class__')._REGISTRY
-            registry = object.__getattribute__(self, registry)
-            if name in registry.fields:
-                return values.get(name)
-
-            return object.__getattribute__(self, name)
-
-        attrs['__getattribute__'] = __getattribute__
-
-        def __setattr__(self, name, value):
-
-            registry = getattr(self, self.__class__._REGISTRY)
-            if name in registry.fields:
-                self._values[name] = registry.schema[name].deserialize(value)
-
-            object.__setattr__(self, name, value)
-
-        attrs['__setattr__'] = __setattr__
-
-        def __eq__(self, other):
-            return self.asdict() == other.asdict()
-
-        attrs['__eq__'] = __eq__
-
-        def __repr__(self):
-            return "<%s %s>" % (self.__class__.__name__, self._values)
-
-        attrs['__repr__'] = __repr__
-
-        def asdict(self):
-            registry = getattr(self, self.__class__._REGISTRY)
-            return registry.schema.serialize(self._values)
-
-        attrs['asdict'] = asdict
-
-        return type.__new__(cls, name, bases, attrs)
+        return class_
 
     def __init__(cls, name, bases, attrs):
-
+        # NOTE: cls is the document class instance NOT the metaclass!
         type.__init__(cls, name, bases, attrs)
 
         abstract = getattr(cls, cls._ABSTRACT)
 
         if not abstract and getattr(cls, cls._COLLECTION, None) is None:
             # Add a default name for documents collection.
+            # MongoBag use this name to load the pymongo collection obj.
             type.__setattr__(cls, cls._COLLECTION, cls.__name__.lower())
 
         if not abstract and getattr(cls, '_id', None) is None:
             raise TypeError('Not abstract classes must have an _id field.')
 
-        # Bind Registry to cls.
-        if getattr(cls, cls._REGISTRY) is None:
-            type.__setattr__(cls, cls._REGISTRY, Registry(cls, bases, attrs))
+        # Create a colander schema of the document.
+        schema = colander.SchemaNode(colander.Mapping(unknown='raise'))
+        type.__setattr__(cls, cls._SCHEMA, schema)
+        type.__setattr__(cls, '__attrs__', {})
+        type.__setattr__(cls, '__fields__', {})
+        type.__setattr__(cls, '__embedded_docs__', {})
+        type.__setattr__(cls, '__embedded_lists__', {})
 
-        fields = getattr(cls, cls._REGISTRY).fields
-        for name in fields:
+        for base in bases:
+            try:
+                base_attrs = base.__attrs__
+                base_fields = base.__fields__
+                base_embedded_docs = base.__embedded_docs__
+                base_embedded_lists = base.__embedded_lists__
+
+            except AttributeError:
+                continue
+
+            else:
+                for name in base_attrs:
+                    attr = base_attrs[name].clone()
+                    cls.__attrs__[attr.name] = attr
+
+                    if attr.name in base_fields:
+                        cls.__fields__[attr.name] = attr
+
+                    if attr.name in base_embedded_docs:
+                        cls.__embedded_docs__[attr.name] = attr
+
+                    if attr.name in base_embedded_lists:
+                        cls.__embedded_lists__[attr.name] = attr
+
+        for name in attrs:
+
+            attr = attrs[name]
+
+            if not isinstance(attr, Field):
+                continue
+
+            attr.name = name
+            cls.__attrs__[name] = attr
+
+            if isinstance(attr, EmbeddedDocument):
+                cls.__embedded_docs__[name] = attr
+
+            elif isinstance(attr, EmbeddedList):
+                cls.__embedded_lists__[name] = attr
+
+            else:
+                cls.__fields__[name] = attr
+
+        schema = getattr(cls, cls._SCHEMA)
+        for name in cls.__attrs__:
+            schema.add(cls.__attrs__[name])
+
+        # Replace fields with MongoQ objects:
+        # user can perform query using the style MyClass.attr == value
+        # instead of Mongo syntax.
+        for name in cls.__attrs__:
             type.__setattr__(cls, name, getattr(mongoq.Q, name))
 
     def __setattr__(cls, name, value):
 
-        if name in getattr(cls, cls._REGISTRY).fields:
-            msg = 'Cannot replace document field: %s.' % name
-            raise AttributeError(msg)
+        if not isinstance(value, Field) and name in cls.__attrs__:
+            raise AttributeError('Attribute value must be a Field instance.')
 
-        if not hasattr(value, 'serialize') or \
-           not hasattr(value, 'deserialize'):
+        elif not isinstance(value, Field):
             return type.__setattr__(cls, name, value)
 
+        value.name = name
+
         for class_ in [cls] + cls.__all_subclasses__():
-            registry = getattr(class_, class_._REGISTRY)
-            setattr(registry, name, value)
+
+            if class_ != cls:
+                value = value.clone()
+
+            class_.__attrs__[name] = value
+
+            if isinstance(value, EmbeddedDocument):
+                class_.__embedded_docs__[name] = value
+
+            elif isinstance(value, EmbeddedList):
+                class_.__embedded_lists__[name] = value
+
+            else:
+                class_.__fields__[name] = value                
+
+            schema = getattr(class_, class_._SCHEMA)
+            schema.add(value)
 
         # Set mongoq.Query instead of field in the parent class only!
-        type.__setattr__(cls, name, getattr(mongoq.Q, name))
+        type.__setattr__(class_, name, getattr(mongoq.Q, name))
 
     def __all_subclasses__(cls):
-        return cls.__subclasses__() + [g for s in cls.__subclasses__()
-                                         for g in s.__all_subclasses__()]
+        subclasses = cls.__subclasses__()
+        return subclasses + [g for s in subclasses
+                               for g in s.__all_subclasses__()]
 
 
-Document = DocumentMetaClass('Document', (object,), {
-    DocumentMetaClass._ABSTRACT: True,
-    '_id': ObjectId(missing=colander.null, default=colander.null)
-})
+class Document(object, metaclass=DocumentMeta):
+
+    __abstract__ = True
+    _id = ObjectId(missing=colander.null, default=colander.null)
+
+    def __init__(self, **kwargs):
+
+        for name in self.__attrs__:
+            value = kwargs.pop(name, colander.null)
+            try:
+                setattr(self, name, value)
+
+            except DocumentAttributeError as e:
+                raise DocumentTypeError(str(e))
+
+        if kwargs:
+            msg = 'Unknown arguments: {}'.format(kwargs)
+            raise DocumentTypeError(msg)
+
+    def __setattr__(self, name, value):
+
+        if name not in self.__attrs__:
+            msg = '{}.{} is not defined'.format(self.__class__.__name__, name)
+            raise DocumentAttributeError(msg)
+
+        elif name in self.__fields__:
+            value = self.validate_field(name, value)
+
+        elif name in self.__embedded_docs__:
+            value = self.validate_embedded_doc(name, value)
+
+        elif name in self.__embedded_lists__:
+            value = self.validate_embedded_list(name, value)
+
+        object.__setattr__(self, name, value)
+
+    def validate_field(self, name, value):
+
+        cstruct = str(value) if value != colander.null else value
+
+        try:
+            value = getattr(self, self._SCHEMA)[name].deserialize(cstruct)
+
+        except colander.Invalid as e:
+            raise DocumentAttributeError(str(e))
+
+        else:
+            return value if value != colander.null else None
+
+    def validate_embedded_doc(self, name, value):
+        
+        schema = self.__embedded_docs__[name]
+
+        if isinstance(value, schema.class_):
+            return value
+
+        if value == colander.null:
+            try:
+                value = schema.deserialize(value)
+
+            except colander.Invalid as e:
+                raise DocumentAttributeError(str(e))
+
+            else:
+                return value if value != colander.null else None
+
+        if not isinstance(value, dict):
+            msg = 'Cannot set {}.{} to {}: must be a {} instance or dict.'
+            msg = msg.format(self.__class__.__name__,
+                             name,
+                             value,
+                             schema.class_)
+            raise DocumentAttributeError(msg)
+
+        candidates = []
+        for cls in [schema.class_] + schema.class_.__all_subclasses__():
+            try:
+                candidates.append(cls(**value))
+
+            except DocumentTypeError:
+                continue
+
+        if len(candidates) > 1:
+            msg = 'Cannot set {}.{} to {}: too many candidates.'
+            msg = msg.format(self.__class__.__name__, name, value)
+            raise DocumentAttributeError(msg)
+
+        if not candidates:
+            msg = 'Cannot set {}.{} to {}: no candidates.'
+            msg = msg.format(self.__class__.__name__, name, value)
+            raise DocumentAttributeError(msg)
+
+        return candidates[0]
+
+    def validate_embedded_list(self, name, value):
+
+        if isinstance(value, DocumentList):
+            return value
+
+        schema = self.__embedded_lists__[name]
+
+        if value == colander.null:
+            try:
+                value = schema.deserialize(value)
+
+            except colander.Invalid as e:
+                raise DocumentAttributeError(str(e))
+
+            else:
+                default = DocumentList(schema.class_, [])
+                return value if value != colander.null else default
+
+        if not isinstance(value, list):
+            msg = 'Cannot set {}.{} to {}: it is not a list.'
+            msg = msg.format(self.__class__.__name__, name, value)
+            raise DocumentAttributeError(msg)
+
+        try:
+            value = DocumentList(schema.class_, value)
+
+        except DocumentTypeError:
+            msg = 'Cannot set {}.{} to {}: objects must be {} instances or dicts.'
+            msg = msg.format(self.__class__.__name__,
+                             name,
+                             value,
+                             schema.class_.__name__)
+            raise DocumentAttributeError(msg)
+
+        return value
+
+    @classmethod
+    def find_one(cls, db, criterion, *args, **kwargs):
+        doc = db[cls._COLLECTION].find_one(criterion, *args, **kwargs)
+        if doc is None:
+            msg = 'No result for: {}'.format(criterion)
+            raise NoResultFound(msg)
+
+        return cls(**doc) if doc else None
+
+    @classmethod
+    def find(cls, db, criterion, **kwargs):
+        for doc in db[cls._COLLECTION].find(criterion, **kwargs):
+            yield cls(**doc)
+
+    def save(self, db, **kwargs):
+        id_ = db[cls._COLLECTION].save(self.asdict(), **kwargs)
+        if not id_ is None:
+            self._id = id_
+
+        return id_
+
+    def insert(self, db, **kwargs):
+        self._id = db[cls._COLLECTION].insert(self.asdict(), **kwargs)
+        return self._id
+
+    def update(self, db, **kwargs):
+        return db[cls._COLLECTION].update(self.asdict(), **kwargs)
+
+    def remove(self, db, **kwargs):
+        return db[cls._COLLECTION].remove(self.asdict(), **kwargs)
+
+    def asdict(self, serialize=False):
+        # serialize parameter is used to perform Colander's serialization
+        # on returned dict.
+        values = {name: getattr(self, name)
+                  for name in self.__fields__
+                  if getattr(self, name, colander.null) != colander.null}
+        # Don't pass 'serialize' paramenter to embedded docs/lists asdict,
+        # Colander's schema serializes the final dict.
+        values.update({name: getattr(self, name).asdict()
+                       for name in self.__embedded_docs__
+                       if getattr(self, name, colander.null) != colander.null})
+        values.update({name: [obj.asdict()
+                              for obj in getattr(self, name)]
+                       for name in self.__embedded_lists__
+                       if getattr(self, name, colander.null) != colander.null})
+        if serialize:
+            values = getattr(self, self._SCHEMA).serialize(values)
+
+        return values
+
+
+class DocumentList(list):
+
+    def __init__(self, class_, list_):
+        self.class_ = class_
+        list.__init__(self, [self.validate_document(doc)
+                             for doc in list_])
+
+    def append(self, obj):
+        list.append(self, self.validate_document(obj))
+
+    def extend(self, list_):
+        list.extend(self, [self.validate_document(doc)
+                           for doc in list_])
+
+    def insert(self, i, obj):
+        list.insert(self, i, self.validate_document(obj))
+
+    def validate_document(self, doc):
+
+        if isinstance(doc, self.class_):
+            return doc
+
+        if not isinstance(doc, dict):
+            msg = 'Object {} must be an instance of {} or dict'
+            raise DocumentTypeError(msg.format(doc, self.class_.__name__))
+
+        candidates = []
+        for cls in [self.class_] + self.class_.__all_subclasses__():
+            try:
+                candidates.append(cls(**doc))
+
+            except DocumentTypeError:
+                continue
+
+        if len(candidates) > 1:
+            msg = 'Too many candidates for {}'
+            msg = msg.format(doc)
+            raise DocumentTypeError(msg)
+
+        if not candidates:
+            msg = 'No candidates for {}'
+            msg = msg.format(doc)
+            raise DocumentTypeError(msg)
+
+        return candidates[0]
