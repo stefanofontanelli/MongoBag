@@ -38,13 +38,13 @@ class TestDeclarative(unittest.TestCase):
                            integer=1,
                            boolean=True,
                            float=2.0,
-                           ed=dict(name='Simple Document as Embedded Doc'))
+                           ed=SimpleDocument(name='Simple Document as Embedded Doc'))
         self.assertEqual(isinstance(doc.ed, SimpleDocument), True)
         doc = MainDocument(string='A string',
                            integer=1,
                            boolean=True,
                            float=2.0,
-                           edl=[dict(name='Simple Document as Embedded Doc')])
+                           edl=[SimpleDocument(name='Simple Document as Embedded Doc')])
         self.assertEqual(isinstance(doc.edl, DocumentList), True)
         self.assertRaises(DocumentTypeError, doc.edl.append, None)
         self.assertRaises(DocumentTypeError, doc.edl.insert, 0, None)
@@ -62,15 +62,23 @@ class TestDeclarative(unittest.TestCase):
         self.assertRaises(DocumentAttributeError, setattr, doc, 'edl', None)
         self.assertRaises(DocumentAttributeError, setattr, doc, 'edl', [simple_doc, None])
 
-    def test_asdict(self):
+    def test_deserialize(self):
+        from .models import SimpleDocument
+        params = dict(name='My Simple Document')
+        doc = SimpleDocument.deserialize(**params)
+        self.assertTrue(isinstance(doc, SimpleDocument))
+
+
+    def test_serialize(self):
         from .models import MainDocument
+        from .models import SimpleDocument
         doc = MainDocument(string='A string',
                            integer=1,
                            boolean=True,
                            float=2.0,
-                           ed=dict(name='Embedded Document'),
-                           edl=[dict(name='Simple Document as Embedded Doc')])
-        values = doc.asdict()
+                           ed=SimpleDocument(name='Embedded Document'),
+                           edl=[SimpleDocument(name='Simple Document as Embedded Doc')])
+        values = doc.serialize()
         for name in ['string', 'ed', 'float', 'edl', 'datetime', 'boolean', 'time', 'date', 'integer', '_id']:
             self.assertIn(name, values)
 

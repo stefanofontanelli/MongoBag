@@ -228,33 +228,12 @@ class Document(object, metaclass=DocumentMeta):
             else:
                 return value if value != colander.null else None
 
-        if not isinstance(value, dict):
-            msg = 'Cannot set {}.{} to {}: must be a {} instance or dict.'
-            msg = msg.format(self.__class__.__name__,
-                             name,
-                             value,
-                             schema.class_)
-            raise DocumentAttributeError(msg)
-
-        candidates = []
-        for cls in [schema.class_] + schema.class_.__all_subclasses__():
-            try:
-                candidates.append(cls(**value))
-
-            except DocumentTypeError:
-                continue
-
-        if len(candidates) > 1:
-            msg = 'Cannot set {}.{} to {}: too many candidates.'
-            msg = msg.format(self.__class__.__name__, name, value)
-            raise DocumentAttributeError(msg)
-
-        if not candidates:
-            msg = 'Cannot set {}.{} to {}: no candidates.'
-            msg = msg.format(self.__class__.__name__, name, value)
-            raise DocumentAttributeError(msg)
-
-        return candidates[0]
+        msg = 'Cannot set {}.{} to {}: invalid value.'
+        msg = msg.format(self.__class__.__name__,
+                         name,
+                         value,
+                         schema.class_)
+        raise DocumentAttributeError(msg)
 
     def validate_embedded_list(self, name, value):
 
@@ -293,55 +272,90 @@ class Document(object, metaclass=DocumentMeta):
         return value
 
     @classmethod
+    def deserialize(cls, **kwargs):
+        for name in cls.__embedded_docs__:
+            schema = cls.__embedded_docs__[name]
+            params = kwargs.pop(name, colander.null)
+            if params == colander.null or params == None:
+                continue
+            
+            kwargs[name] = schema.class_.deserialize(**params)
+
+        for name in cls.__embedded_lists__:
+            schema = cls.__embedded_lists__[name]
+            values = kwargs.pop(name, colander.null)
+            if values == colander.null or values == None:
+                continue
+            
+            kwargs[name] = DocumentList(schema.class_,
+                                        [schema.class_.deserialize(**params)
+                                         for params in values])
+
+        candidates = []
+        for class_ in [cls] + cls.__all_subclasses__():
+            try:
+                candidates.append(class_(**kwargs))
+
+            except DocumentTypeError:
+                continue
+
+        if len(candidates) > 1:
+            msg = 'Cannot set {}.{} to {}: too many candidates.'
+            msg = msg.format(self.__class__.__name__, name, value)
+            raise DocumentTypeError(msg)
+
+        if not candidates:
+            msg = 'Cannot set {}.{} to {}: no candidates.'
+            msg = msg.format(self.__class__.__name__, name, value)
+            raise DocumentTypeError(msg)
+
+        return candidates[0]
+
+    @classmethod
     def find_one(cls, db, criterion, *args, **kwargs):
         doc = db[cls._COLLECTION].find_one(criterion, *args, **kwargs)
         if doc is None:
             msg = 'No result for: {}'.format(criterion)
             raise NoResultFound(msg)
 
-        return cls(**doc) if doc else None
+        return cls.deserialize(**doc) if doc else None
 
     @classmethod
     def find(cls, db, criterion, **kwargs):
         for doc in db[cls._COLLECTION].find(criterion, **kwargs):
-            yield cls(**doc)
+            yield cls.deserialize(**doc)
+
+    def serialize(self):
+        """ Convert document to dict.
+        """
+        values = {name: getattr(self, name)
+                  for name in self.__fields__
+                  if getattr(self, name, colander.null) != colander.null}
+        values.update({name: getattr(self, name).serialize()
+                       for name in self.__embedded_docs__
+                       if getattr(self, name, colander.null) != colander.null})
+        values.update({name: [obj.serialize()
+                              for obj in getattr(self, name)]
+                       for name in self.__embedded_lists__
+                       if getattr(self, name, colander.null) != colander.null})
+        return values
 
     def save(self, db, **kwargs):
-        id_ = db[cls._COLLECTION].save(self.asdict(), **kwargs)
+        id_ = db[cls._COLLECTION].save(self.serialize(), **kwargs)
         if not id_ is None:
             self._id = id_
 
         return id_
 
     def insert(self, db, **kwargs):
-        self._id = db[cls._COLLECTION].insert(self.asdict(), **kwargs)
+        self._id = db[cls._COLLECTION].insert(self.serialize(), **kwargs)
         return self._id
 
     def update(self, db, **kwargs):
-        return db[cls._COLLECTION].update(self.asdict(), **kwargs)
+        return db[cls._COLLECTION].update(self.serialize(), **kwargs)
 
     def remove(self, db, **kwargs):
-        return db[cls._COLLECTION].remove(self.asdict(), **kwargs)
-
-    def asdict(self, serialize=False):
-        # serialize parameter is used to perform Colander's serialization
-        # on returned dict.
-        values = {name: getattr(self, name)
-                  for name in self.__fields__
-                  if getattr(self, name, colander.null) != colander.null}
-        # Don't pass 'serialize' paramenter to embedded docs/lists asdict,
-        # Colander's schema serializes the final dict.
-        values.update({name: getattr(self, name).asdict()
-                       for name in self.__embedded_docs__
-                       if getattr(self, name, colander.null) != colander.null})
-        values.update({name: [obj.asdict()
-                              for obj in getattr(self, name)]
-                       for name in self.__embedded_lists__
-                       if getattr(self, name, colander.null) != colander.null})
-        if serialize:
-            values = getattr(self, self._SCHEMA).serialize(values)
-
-        return values
+        return db[cls._COLLECTION].remove(self.serialize(), **kwargs)
 
 
 class DocumentList(list):
@@ -363,29 +377,8 @@ class DocumentList(list):
 
     def validate_document(self, doc):
 
-        if isinstance(doc, self.class_):
-            return doc
-
-        if not isinstance(doc, dict):
-            msg = 'Object {} must be an instance of {} or dict'
+        if not isinstance(doc, self.class_):
+            msg = 'Object {} must be an instance of {}.'
             raise DocumentTypeError(msg.format(doc, self.class_.__name__))
 
-        candidates = []
-        for cls in [self.class_] + self.class_.__all_subclasses__():
-            try:
-                candidates.append(cls(**doc))
-
-            except DocumentTypeError:
-                continue
-
-        if len(candidates) > 1:
-            msg = 'Too many candidates for {}'
-            msg = msg.format(doc)
-            raise DocumentTypeError(msg)
-
-        if not candidates:
-            msg = 'No candidates for {}'
-            msg = msg.format(doc)
-            raise DocumentTypeError(msg)
-
-        return candidates[0]
+        return doc
