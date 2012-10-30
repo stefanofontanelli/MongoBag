@@ -218,7 +218,10 @@ class Document(object, metaclass=DocumentMeta):
         if isinstance(value, schema.class_):
             return value
 
-        if value == colander.null:
+        if value is None:
+            value = colander.null
+
+        if value is colander.null:
             try:
                 value = schema.deserialize(value)
 
@@ -241,8 +244,7 @@ class Document(object, metaclass=DocumentMeta):
             return value
 
         schema = self.__embedded_lists__[name]
-
-        if value == colander.null:
+        if value is colander.null:
             try:
                 value = schema.deserialize(value)
 
@@ -273,10 +275,11 @@ class Document(object, metaclass=DocumentMeta):
 
     @classmethod
     def deserialize(cls, **kwargs):
+
         for name in cls.__embedded_docs__:
             schema = cls.__embedded_docs__[name]
             params = kwargs.pop(name, colander.null)
-            if params == colander.null or params == None:
+            if params is colander.null or params is None:
                 continue
             
             kwargs[name] = schema.class_.deserialize(**params)
@@ -284,7 +287,7 @@ class Document(object, metaclass=DocumentMeta):
         for name in cls.__embedded_lists__:
             schema = cls.__embedded_lists__[name]
             values = kwargs.pop(name, colander.null)
-            if values == colander.null or values == None:
+            if values is colander.null or values is None:
                 continue
             
             kwargs[name] = DocumentList(schema.class_,
@@ -300,13 +303,13 @@ class Document(object, metaclass=DocumentMeta):
                 continue
 
         if len(candidates) > 1:
-            msg = 'Cannot set {}.{} to {}: too many candidates.'
-            msg = msg.format(self.__class__.__name__, name, value)
+            msg = 'Cannot deserialize {} using {}: too many candidates.'
+            msg = msg.format(cls.__name__, kwargs)
             raise DocumentTypeError(msg)
 
         if not candidates:
-            msg = 'Cannot set {}.{} to {}: no candidates.'
-            msg = msg.format(self.__class__.__name__, name, value)
+            msg = 'Cannot deserialize {} using {}: no candidates.'
+            msg = msg.format(cls.__name__, kwargs)
             raise DocumentTypeError(msg)
 
         return candidates[0]

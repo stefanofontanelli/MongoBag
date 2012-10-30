@@ -58,16 +58,33 @@ class TestDeclarative(unittest.TestCase):
         self.assertRaises(DocumentAttributeError, setattr, simple_doc, 'myattr', None)
         doc = MainDocument(string='A string', integer=1, boolean=True, float=2.0)
         doc.ed = simple_doc
-        self.assertRaises(DocumentAttributeError, setattr, doc, 'ed', None)
+        self.assertEqual(doc.ed, simple_doc)
+        doc.ed = None
+        self.assertEqual(doc.ed, None)
         self.assertRaises(DocumentAttributeError, setattr, doc, 'edl', None)
         self.assertRaises(DocumentAttributeError, setattr, doc, 'edl', [simple_doc, None])
 
     def test_deserialize(self):
+        from .models import MainDocument
         from .models import SimpleDocument
+        from mongobag import DocumentTypeError
         params = dict(name='My Simple Document')
         doc = SimpleDocument.deserialize(**params)
         self.assertTrue(isinstance(doc, SimpleDocument))
-
+        params = dict(string='A string', integer=1, boolean=True, float=2.0, ed=None, edl=None)
+        doc = MainDocument.deserialize(**params)
+        self.assertTrue(isinstance(doc, MainDocument))
+        params = dict(string='A string', integer=1, boolean=True, float=2.0, 
+                      ed=dict(name='My Simple Document'), edl=None)
+        doc = MainDocument.deserialize(**params)
+        self.assertTrue(isinstance(doc, MainDocument))
+        params = dict(string='A string', integer=1, boolean=True, float=2.0, 
+                      ed=dict(name='My Simple Document'), edl=[])
+        doc = MainDocument.deserialize(**params)
+        self.assertTrue(isinstance(doc, MainDocument))
+        params = dict(string='A string', integer=1, boolean=True, float=2.0, 
+                      ed=dict(name='My Simple Document', surname='Surname'), edl=[])
+        self.assertRaises(DocumentTypeError,  MainDocument.deserialize, **params)
 
     def test_serialize(self):
         from .models import MainDocument
